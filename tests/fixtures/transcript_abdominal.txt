@@ -1,0 +1,39 @@
+Agent: Hi, this is the intake assistant for the clinic. Before your appointment I'd like to ask a few questions so the doctor knows what's going on. This will take about five to seven minutes. Is now a good time?
+Patient: Yeah, that's fine.
+Agent: Great. To start — what's the main reason you're coming in today?
+Patient: I've got this sharp pain in my right side, kind of low down. Started a couple days ago and it's not really going away.
+Agent: Got it — sharp pain on the right lower side, started a couple days ago. When exactly did it start?
+Patient: Tuesday morning. I noticed it when I was making coffee.
+Agent: And is there anything that makes it worse?
+Patient: It's worse when I press on it. And when I eat anything heavy.
+Agent: Anything that makes it better?
+Patient: Lying still helps a bit.
+Agent: How would you describe the pain itself — sharp, dull, burning, pressure?
+Patient: Sharp. Kind of stabbing. It's not constant though — it comes and goes.
+Agent: Does it stay in one place, or does it move or spread?
+Patient: Mostly stays put. Sometimes I feel it a bit toward my back when it's really bad.
+Agent: On a scale of zero to ten, where zero is no pain and ten is the worst you can imagine, where is it now?
+Patient: Right now? Maybe a four. Last night it was probably a seven.
+Agent: And the timing — is it constant, or does it come and go? Any pattern?
+Patient: Comes and goes. Worse after meals, and a couple times overnight.
+Agent: Anything else going on with it — nausea, fever, anything like that?
+Patient: A little nauseous yesterday. No throwing up. I don't think I've had a fever.
+Agent: Have you tried anything for it?
+Patient: Took some ibuprofen. Didn't really help.
+Agent: Have you ever had anything like this before?
+Patient: No, this is new.
+Agent: Anything happen around the time it started — injury, new food, travel?
+Patient: I went to Mexico three weeks ago, but that was a while ago. Otherwise no.
+Agent: I'd like to ask about a few other things briefly. Any fever, chills, or unintentional weight loss recently?
+Patient: No fever, no chills. I haven't been weighing myself but I don't think so. Maybe a bit more tired than usual.
+Agent: Any vomiting, diarrhea, constipation, or blood in your stool?
+Patient: No, none of that.
+Agent: Any change in appetite?
+Patient: Not really.
+Agent: Any burning when you urinate, going more often, or pain in your back near your kidneys?
+Patient: Nope, none of that.
+Agent: Okay, let me make sure I have this right. You're coming in today for sharp pain in your right lower side that started Tuesday morning. It comes and goes, worse with eating and when you press on it, sometimes radiates to your back, four out of ten right now and seven at its worst. Some mild nausea, no vomiting, no fever. Ibuprofen didn't help. First time having this. Did I miss anything?
+Patient: That sounds right. One thing — I've been pretty stressed at work lately. I don't know if that matters, but I figured I'd mention it.
+Agent: Got it, I'll pass that along. Anything else you want the doctor to know before your visit?
+Patient: No, I think that covers it.
+Agent: Perfect. The doctor will have all of this when you arrive. Take care.

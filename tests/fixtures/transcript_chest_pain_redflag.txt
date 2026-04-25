@@ -1,0 +1,16 @@
+Agent: Hi, this is the intake assistant for the clinic. Before your appointment I'd like to ask a few questions so the doctor knows what's going on. This will take about five to seven minutes. Is now a good time?
+Patient: Yes, sure.
+Agent: Great. To start — what's the main reason you're coming in today?
+Patient: I've been having this pressure in my chest. Started about an hour ago. It's also kind of going down my left arm and I'm sweating.
+Agent: Pressure in your chest, going down your left arm, and you're sweating — is that right?
+Patient: Yes. And I feel a little short of breath too.
+Agent: Based on what you're describing, this could be a serious emergency. I want you to hang up with me and call 911 right now, or have someone drive you to the nearest emergency room. Please don't wait for your appointment. Can you do that?
+Patient: Oh — yeah, okay. My wife is here, she can drive me.
+Agent: Please go right now. I'm going to make a note for the doctor, but the most important thing is that you get to the ER. Do you have any chest pain medications you've been told to take in an emergency?
+Patient: No, nothing like that.
+Agent: Okay. One quick thing — when did the chest pressure first start?
+Patient: About an hour ago. I was just sitting on the couch.
+Agent: And the sweating and the arm pain — did those start at the same time, or after?
+Patient: Around the same time. Maybe a few minutes after.
+Agent: Okay. Please go to the emergency room now. The doctor will be notified. Take care of yourself.
+Patient: Thank you. We're heading out now.

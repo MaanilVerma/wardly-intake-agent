@@ -1,0 +1,47 @@
+Agent: Hi, this is the intake assistant for the clinic. Before your appointment I'd like to ask a few questions so the doctor knows what's going on. This will take about five to seven minutes. Is now a good time?
+Patient: Yeah, this is a good time.
+Agent: Great. To start — what's the main reason you're coming in today?
+Patient: I just haven't been feeling like myself for a couple of months now. I'm tired all the time, I've lost some weight without trying, and I've been getting these random headaches.
+Agent: Got it — fatigue, unintentional weight loss, and headaches over a couple of months. Let's start with the fatigue. When did you first notice it?
+Patient: Maybe two months ago? It came on gradually. It just kept getting worse.
+Agent: How would you describe it — like you can't get out of bed, or like you can do things but everything takes more effort?
+Patient: The second one. I can do my normal stuff but it feels like wading through mud.
+Agent: Is there anything that makes it better — rest, caffeine, anything?
+Patient: Coffee helps for an hour or two. Sleeping in on the weekend helps a little, but I never feel really rested.
+Agent: How much weight have you lost, roughly?
+Patient: Maybe twelve pounds in two months. I haven't been trying.
+Agent: And your appetite — about the same, more, or less than usual?
+Patient: Honestly less. I just don't feel that hungry most days.
+Agent: Tell me about the headaches. Where do you feel them, and how often?
+Patient: Mostly across my forehead. They come maybe three or four times a week. They're not super severe, like a four or five out of ten, but they're persistent.
+Agent: How long do they last?
+Patient: A few hours. Sometimes most of the day if I don't take anything.
+Agent: Have you tried anything for them?
+Patient: Tylenol. It takes the edge off but doesn't really make them go away.
+Agent: Anything that seems to bring them on — stress, bright light, certain foods?
+Patient: Maybe stress. I've had a lot going on at work. Not really light or food that I've noticed.
+Agent: Now I'd like to ask about a few other things briefly. Any fever, chills, or night sweats?
+Patient: I have woken up a few times sweaty. Not often, maybe once or twice a week. No fever I'm aware of, no chills.
+Agent: Any changes in your hair, skin, or how warm or cold you feel compared to other people?
+Patient: Now that you mention it, I've been feeling cold more than usual. And my hair has been falling out a bit more in the shower.
+Agent: Any heart racing or pounding?
+Patient: No, not that I've noticed.
+Agent: Any changes in your bowel habits — constipation, diarrhea?
+Patient: A little more constipated than usual, yeah.
+Agent: Any vision changes?
+Patient: No.
+Agent: How is your mood overall? Are you feeling down, or having trouble enjoying things you used to?
+Patient: Yeah, honestly. I've been pretty low. I figured it was just the work stress but it's been a while now.
+Agent: Any thoughts of harming yourself or anyone else?
+Patient: No, nothing like that.
+Agent: How is your sleep — falling asleep, staying asleep, waking too early?
+Patient: I fall asleep okay. I wake up a few times a night. Mornings are the hardest.
+Agent: Have you ever had thyroid problems or any chronic medical conditions?
+Patient: My mom had a thyroid issue. I haven't been diagnosed with anything myself.
+Agent: Are you on any medications or supplements?
+Patient: Just a multivitamin.
+Agent: Okay, let me make sure I have this right. You're coming in for fatigue, about twelve pounds of unintentional weight loss, and persistent headaches, all over the past couple of months. You're feeling cold more than usual, more constipated, hair shedding more, mood has been low, sleep is broken. Family history of thyroid issues. No fever, no vision changes. Did I miss anything?
+Patient: That's about it. I just want to get to the bottom of it.
+Agent: Got it. Anything else you want the doctor to know before your visit?
+Patient: No, I think that covers it.
+Agent: Perfect. The doctor will have all of this when you arrive. Take care.
