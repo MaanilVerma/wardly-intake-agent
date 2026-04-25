@@ -1,0 +1,178 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClinicalIntakeBrief",
+  "description": "Structured pre-visit clinical brief produced from a patient phone intake. Sections follow standard clinical chart structure (CC, HPI, ROS).",
+  "type": "object",
+  "required": ["chief_complaint", "hpi", "ros"],
+  "additionalProperties": false,
+  "properties": {
+    "chief_complaint": {
+      "type": "object",
+      "description": "The single main reason for the visit.",
+      "required": ["verbatim", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "verbatim": {
+          "type": "string",
+          "description": "Patient's own words. NOT a paraphrase. Quote them."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Clinician-shorthand summary, e.g. 'RLQ abdominal pain x 2 days'."
+        }
+      }
+    },
+    "hpi": {
+      "type": "object",
+      "description": "History of Present Illness, structured per OPQRST plus associated symptoms and context. Any field may be null if not gathered or not applicable.",
+      "required": ["narrative"],
+      "additionalProperties": false,
+      "properties": {
+        "onset": {
+          "type": ["string", "null"],
+          "description": "When and how it started. e.g. '2 days ago, gradual onset' or 'sudden onset this morning'."
+        },
+        "location": {
+          "type": ["string", "null"],
+          "description": "Anatomical location, e.g. 'right lower quadrant', 'substernal'."
+        },
+        "duration": {
+          "type": ["string", "null"],
+          "description": "Total duration if distinct from onset (e.g. 'episodes lasting ~10 minutes each')."
+        },
+        "character": {
+          "type": ["string", "null"],
+          "description": "Quality. e.g. 'sharp', 'dull, achy', 'burning', 'pressure-like'."
+        },
+        "aggravating_factors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Things that make it worse. e.g. ['eating', 'lying flat']."
+        },
+        "alleviating_factors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Things that make it better. e.g. ['rest', 'ibuprofen']."
+        },
+        "radiation": {
+          "type": ["string", "null"],
+          "description": "Where it spreads to, or 'none'."
+        },
+        "severity_now": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Current severity on 0-10 scale."
+        },
+        "severity_worst": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Worst severity reached on 0-10 scale."
+        },
+        "timing": {
+          "type": ["string", "null"],
+          "description": "Pattern. e.g. 'constant', 'intermittent, worse at night', 'episodic post-prandial'."
+        },
+        "associated_symptoms": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Other symptoms accompanying the CC. e.g. ['nausea', 'low-grade fever']."
+        },
+        "context": {
+          "type": ["string", "null"],
+          "description": "Relevant context — recent injury, new medication, travel, stress, food."
+        },
+        "prior_episodes": {
+          "type": ["string", "null"],
+          "description": "History of similar episodes. 'First time' or description of prior occurrences."
+        },
+        "treatments_tried": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "What patient has tried, with response. e.g. ['ibuprofen 400mg, no relief', 'heating pad, mild relief']."
+        },
+        "narrative": {
+          "type": "string",
+          "description": "2-4 sentence clinician-style paragraph in third person summarizing the HPI. This is what the clinician reads first."
+        }
+      }
+    },
+    "ros": {
+      "type": "object",
+      "description": "Targeted Review of Systems. Each system has positives (symptoms present) and negatives (symptoms explicitly denied). Only include systems actually asked about.",
+      "additionalProperties": false,
+      "properties": {
+        "constitutional": { "$ref": "#/definitions/ros_system" },
+        "heent":          { "$ref": "#/definitions/ros_system" },
+        "cardiac":        { "$ref": "#/definitions/ros_system" },
+        "respiratory":    { "$ref": "#/definitions/ros_system" },
+        "gi":             { "$ref": "#/definitions/ros_system" },
+        "gu":             { "$ref": "#/definitions/ros_system" },
+        "msk":            { "$ref": "#/definitions/ros_system" },
+        "skin":           { "$ref": "#/definitions/ros_system" },
+        "neuro":          { "$ref": "#/definitions/ros_system" },
+        "psych":          { "$ref": "#/definitions/ros_system" },
+        "endocrine":      { "$ref": "#/definitions/ros_system" },
+        "heme_lymph":     { "$ref": "#/definitions/ros_system" },
+        "allergy_immuno": { "$ref": "#/definitions/ros_system" }
+      }
+    },
+    "red_flags": {
+      "type": "array",
+      "description": "Symptoms or combinations that triggered an emergency-care recommendation during the call.",
+      "items": {
+        "type": "object",
+        "required": ["symptom", "severity"],
+        "additionalProperties": false,
+        "properties": {
+          "symptom":   { "type": "string", "description": "e.g. 'chest pain radiating to left arm with diaphoresis'" },
+          "severity":  { "type": "string", "enum": ["concern", "urgent", "emergent"] },
+          "advised_action": { "type": ["string", "null"], "description": "What the agent told the patient to do." }
+        }
+      }
+    },
+    "patient_demographics": {
+      "type": "object",
+      "description": "Demographic info captured during the call. All optional.",
+      "additionalProperties": false,
+      "properties": {
+        "age":  { "type": ["integer", "null"], "minimum": 0, "maximum": 120 },
+        "sex":  { "type": ["string", "null"], "enum": ["male", "female", "other", "prefer_not_to_say", null] },
+        "pregnancy_status": { "type": ["string", "null"], "enum": ["pregnant", "not_pregnant", "unknown", "n/a", null] }
+      }
+    },
+    "intake_notes": {
+      "type": ["string", "null"],
+      "description": "Free-text notes the agent captured at wrap-up — anything the patient wanted the doctor to know that didn't fit elsewhere."
+    },
+    "call_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "call_id":       { "type": "string" },
+        "started_at":    { "type": "string", "format": "date-time" },
+        "ended_at":      { "type": "string", "format": "date-time" },
+        "duration_sec":  { "type": "integer" }
+      }
+    }
+  },
+  "definitions": {
+    "ros_system": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "positives": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Symptoms in this system that the patient confirmed. e.g. ['nausea', 'loose stools x 3']."
+        },
+        "negatives": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Symptoms in this system that the patient explicitly denied. e.g. ['no vomiting', 'no fever']."
+        }
+      }
+    }
+  }
+}
