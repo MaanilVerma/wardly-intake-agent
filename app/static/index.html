@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wardly · Pre-Visit Intake</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">W</span>
+      <span class="brand-name">Wardly</span>
+      <span class="brand-sub">Pre-Visit Intake</span>
+    </div>
+    <div class="topbar-actions">
+      <label class="toggle">
+        <input id="auto-speak" type="checkbox" checked />
+        <span>Speak responses</span>
+      </label>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="panel">
+      <div id="chat" class="chat" aria-live="polite" aria-label="Conversation">
+        <div class="welcome">
+          <h1>Pre-Visit Intake</h1>
+          <p>
+            This is a simulated patient intake. Click <strong>Start intake</strong>
+            and the assistant will walk you through the chief complaint,
+            history of present illness, and a targeted review of systems. At
+            the end, it generates a structured clinical brief.
+          </p>
+          <p class="welcome-fine">
+            Voice input requires Chrome or Edge. If your browser doesn't
+            support it, just type — the agent works the same way.
+          </p>
+        </div>
+      </div>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+
+      <form id="composer" class="composer" autocomplete="off">
+        <button id="mic" type="button" class="btn btn-mic" aria-label="Hold to speak" disabled>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" fill="currentColor"/>
+            <path d="M19 11a1 1 0 1 0-2 0 5 5 0 1 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21h-3a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.08A7 7 0 0 0 19 11Z" fill="currentColor"/>
+          </svg>
+        </button>
+        <input
+          id="text-input"
+          class="text-input"
+          type="text"
+          placeholder="Click Start intake to begin…"
+          aria-label="Your message"
+          disabled
+        />
+        <button id="send" type="submit" class="btn btn-send" disabled>Send</button>
+      </form>
+
+      <div class="actions">
+        <button id="start" type="button" class="btn btn-primary">Start intake</button>
+        <button id="end" type="button" class="btn btn-danger" disabled>End intake</button>
+      </div>
+    </section>
+
+    <aside class="meta">
+      <h2>How this works</h2>
+      <ol>
+        <li>Click <strong>Start intake</strong>.</li>
+        <li>Answer the agent's questions one at a time, by voice or by text.</li>
+        <li>Click <strong>End intake</strong> when you're done. We generate a structured brief and open it.</li>
+      </ol>
+      <p class="meta-note">
+        The agent flags red-flag symptoms (chest pain with radiation, stroke
+        signs, etc.) in real time and instructs you to seek emergency care.
+        It does not diagnose or give medical advice — it gathers structured
+        information for the clinician.
+      </p>
+    </aside>
+  </main>
+
+  <script src="/static/chat.js"></script>
+</body>
+</html>
