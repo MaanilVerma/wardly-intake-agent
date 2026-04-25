@@ -1,0 +1,98 @@
+{
+  "_comment": "Vapi assistant config for the bonus voice path. Replace placeholders before creating: __SERVER_URL__ (your ngrok HTTPS URL) and __SYSTEM_PROMPT__ (full text of prompts/system_prompt.md). Submit via POST https://api.vapi.ai/assistant or paste field-by-field into the Vapi dashboard. The brief is extracted by our backend from the transcript — we deliberately do NOT use Vapi's structured-output feature, so no structuredOutputIds.",
+
+  "name": "wardly-intake-agent",
+
+  "firstMessage": "Hi, this is the intake assistant for the clinic. Before your appointment I'd like to ask a few questions so the doctor knows what's going on. This will take about five to seven minutes. Is now a good time?",
+
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova-3",
+    "language": "en",
+    "smartFormat": true,
+    "endpointing": 300,
+    "confidenceThreshold": 0.5
+  },
+
+  "model": {
+    "provider": "google",
+    "model": "gemini-2.5-flash",
+    "temperature": 0.4,
+    "maxTokens": 400,
+    "systemPrompt": "__SYSTEM_PROMPT__",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "flag_red_flag",
+          "description": "Call this immediately when the patient describes a symptom or combination of symptoms that warrants emergency care. Always advise the patient to call 911 or go to the ER first, then call this tool. After calling, wrap up the call quickly — do not continue the full intake.",
+          "parameters": {
+            "type": "object",
+            "required": ["symptom", "severity"],
+            "properties": {
+              "symptom": {
+                "type": "string",
+                "description": "The symptom or combination, in clinician-style shorthand. e.g. 'chest pain radiating to left arm with diaphoresis' or 'sudden severe headache, worst of life'."
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["concern", "urgent", "emergent"],
+                "description": "Triage level. 'concern' = should be seen today; 'urgent' = same-day urgent care; 'emergent' = call 911 / go to ER now."
+              },
+              "advised_action": {
+                "type": "string",
+                "description": "What you told the patient to do."
+              }
+            }
+          },
+          "server": {
+            "url": "__SERVER_URL__/webhook/tool-call"
+          }
+        }
+      }
+    ]
+  },
+
+  "voice": {
+    "provider": "11labs",
+    "voiceId": "EXAVITQu4vr4xnSDxMaL",
+    "model": "eleven_turbo_v2_5",
+    "stability": 0.5,
+    "similarityBoost": 0.75,
+    "style": 0.2,
+    "useSpeakerBoost": true,
+    "_voice_note": "Sarah from ElevenLabs — warm, clear, professional. If credits are tight, swap to a free Vapi-provider voice or cartesia/sonic-english."
+  },
+
+  "serverUrl": "__SERVER_URL__/webhook/end-of-call",
+  "serverMessages": ["end-of-call-report", "status-update"],
+
+  "endCallFunctionEnabled": true,
+  "endCallMessage": "Thanks for the time. The doctor will have all of this when you arrive. Take care.",
+  "endCallPhrases": ["goodbye", "hang up"],
+
+  "silenceTimeoutSeconds": 30,
+  "maxDurationSeconds": 600,
+  "responseDelaySeconds": 0.4,
+  "llmRequestDelaySeconds": 0.1,
+  "numWordsToInterruptAssistant": 2,
+
+  "backgroundSound": "off",
+  "backchannelingEnabled": true,
+  "modelOutputInMessagesEnabled": true,
+
+  "artifactPlan": {
+    "recordingEnabled": true,
+    "transcriptPlan": { "enabled": true }
+  },
+
+  "_setup_steps": [
+    "1. Replace __SYSTEM_PROMPT__ with the full contents of prompts/system_prompt.md (escape newlines and quotes if posting via API).",
+    "2. Replace __SERVER_URL__ with your ngrok HTTPS URL (e.g. https://abcd-1234.ngrok-free.app).",
+    "3. Submit via POST https://api.vapi.ai/assistant with Bearer auth, OR paste field-by-field into the dashboard's Create Assistant form.",
+    "4. Phone Numbers → 'Free Vapi Number' → US, attach this assistant.",
+    "5. Call the number and watch your server logs.",
+    "Note: tool-calls are routed via the function-level server.url (NOT the assistant-level serverUrl), so 'tool-calls' is intentionally absent from serverMessages.",
+    "Note: brief extraction is owned by the backend (app/brief.py) — Vapi structured outputs are not configured."
+  ]
+}
