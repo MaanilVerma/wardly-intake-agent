@@ -34,6 +34,18 @@ DEFAULT_MODEL = "gemini-2.5-flash-lite"
 FALLBACK_MODELS = ("gemini-2.0-flash", "gemini-2.5-flash")
 DEFAULT_TEMPERATURE = 0.4
 DEFAULT_MAX_OUTPUT_TOKENS = 600
+# Bound any single Gemini call so a hung upstream can't tie up a request
+# thread forever. Extraction needs longer than chat (more tokens, more rules).
+CHAT_TIMEOUT_MS = 30_000
+EXTRACT_TIMEOUT_MS = 60_000
+
+
+class LLMQuotaExhausted(RuntimeError):
+    """Every model in FALLBACK_MODELS returned 429 / RESOURCE_EXHAUSTED."""
+
+
+class LLMUpstreamError(RuntimeError):
+    """Non-quota failure talking to Gemini (network, schema, empty response)."""
 
 
 @dataclass(frozen=True)
@@ -42,8 +54,6 @@ class ChatMessage:
     role: Literal["user", "assistant"]
     content: str
 
-
-# --- client ----------------------------------------------------------------
 
 _client: genai.Client | None = None
 
@@ -58,11 +68,12 @@ def _get_client() -> genai.Client:
             raise RuntimeError(
                 "GOOGLE_API_KEY is not set. Add it to .env (see .env.example)."
             )
-        _client = genai.Client(api_key=api_key)
+        _client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=EXTRACT_TIMEOUT_MS),
+        )
     return _client
 
-
-# --- conversation ----------------------------------------------------------
 
 def _history_to_contents(history: list[ChatMessage]) -> list[types.Content]:
     """Convert our role-tagged history into the Gemini SDK's Content shape.
@@ -118,18 +129,16 @@ def chat_turn(
                 raise
             logger.warning("chat: model %s hit quota: %s — trying next fallback", candidate, str(e)[:120])
     if response is None:
-        raise RuntimeError(
+        raise LLMQuotaExhausted(
             f"All Gemini models hit quota (tried: {', '.join(candidates)}). "
             "Wait a few minutes; per-minute limits clear quickly. Daily limits reset at Pacific midnight."
         ) from last_exc
 
     text = (response.text or "").strip()
     if not text:
-        raise RuntimeError("Gemini returned an empty completion")
+        raise LLMUpstreamError("Gemini returned an empty completion")
     return text
 
-
-# --- structured extraction --------------------------------------------------
 
 def _is_quota_error(exc: Exception) -> bool:
     """True if this looks like a 429 / quota exhausted error from the Gemini SDK."""
@@ -185,8 +194,7 @@ def generate_structured(
                 raise
             logger.warning("model %s hit quota: %s — trying next fallback", candidate, str(e)[:120])
     if response is None:
-        # All candidates exhausted.
-        raise RuntimeError(
+        raise LLMQuotaExhausted(
             f"All Gemini models hit quota (tried: {', '.join(candidates)}). "
             "Wait a few minutes for the per-minute limit to clear, or for the "
             "daily limit to reset (Pacific midnight)."
@@ -199,13 +207,13 @@ def generate_structured(
 
     text = response.text or ""
     if not text.strip():
-        raise RuntimeError("Gemini returned no JSON payload")
+        raise LLMUpstreamError("Gemini returned no JSON payload")
     import json
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
         logger.error("Gemini returned invalid JSON: %r", text[:500])
-        raise RuntimeError(f"Gemini returned invalid JSON: {e}") from e
+        raise LLMUpstreamError(f"Gemini returned invalid JSON: {e}") from e
 
 
 __all__ = [
@@ -213,4 +221,6 @@ __all__ = [
     "chat_turn",
     "generate_structured",
     "DEFAULT_MODEL",
+    "LLMQuotaExhausted",
+    "LLMUpstreamError",
 ]
