@@ -5,6 +5,7 @@
 
 # Generated clinical briefs (contain simulated PHI — never commit)
 briefs/
+/docs/
 
 # Python
 __pycache__/
