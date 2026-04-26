@@ -24,9 +24,14 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-# Single source of model config. Gemini 2.5 Flash is on the free tier and
-# supports JSON-Schema-constrained output natively.
-DEFAULT_MODEL = "gemini-2.5-flash"
+# Single source of model config. We default to gemini-2.5-flash-lite — same
+# JSON-Schema-constrained output as flash, but the free-tier daily quota is
+# ~10x higher (1000 RPD vs ~20-250 RPD on flash), which actually matters for
+# a take-home that runs eval tests + live calls + Loom takes off one key.
+# If quality on a specific call disappoints, override per-call via the
+# `model=` kwarg on chat_turn / generate_structured.
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
+FALLBACK_MODELS = ("gemini-2.0-flash", "gemini-2.5-flash")
 DEFAULT_TEMPERATURE = 0.4
 DEFAULT_MAX_OUTPUT_TOKENS = 600
 
@@ -81,31 +86,59 @@ def chat_turn(
 
     `history` is the full prior dialog (user and assistant turns alternating,
     starting with the user). `system` is the conversation system prompt.
-    Returns the assistant's plain-text reply.
+    Returns the assistant's plain-text reply. Falls back through FALLBACK_MODELS
+    on quota exhaustion so a single saturated daily limit doesn't kill the chat.
     """
     if not history:
         raise ValueError("chat_turn requires at least one message in history")
     if history[-1].role != "user":
         raise ValueError("chat_turn expects history to end on a user turn")
 
-    response = _get_client().models.generate_content(
-        model=model,
-        contents=_history_to_contents(history),
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            temperature=temperature,
-            max_output_tokens=max_output_tokens,
-        ),
+    client = _get_client()
+    contents = _history_to_contents(history)
+    config = types.GenerateContentConfig(
+        system_instruction=system,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
     )
+    candidates = [model] + [m for m in FALLBACK_MODELS if m != model]
+    last_exc: Exception | None = None
+    response = None
+    for candidate in candidates:
+        try:
+            response = client.models.generate_content(
+                model=candidate, contents=contents, config=config
+            )
+            if candidate != model:
+                logger.warning("chat: primary %s exhausted; succeeded on fallback %s", model, candidate)
+            break
+        except Exception as e:
+            last_exc = e
+            if not _is_quota_error(e):
+                raise
+            logger.warning("chat: model %s hit quota: %s — trying next fallback", candidate, str(e)[:120])
+    if response is None:
+        raise RuntimeError(
+            f"All Gemini models hit quota (tried: {', '.join(candidates)}). "
+            "Wait a few minutes; per-minute limits clear quickly. Daily limits reset at Pacific midnight."
+        ) from last_exc
+
     text = (response.text or "").strip()
     if not text:
-        # Defensive: a finished but empty completion (rare but possible) would
-        # cause an awkward silent turn. Surface it as an error so we know.
         raise RuntimeError("Gemini returned an empty completion")
     return text
 
 
 # --- structured extraction --------------------------------------------------
+
+def _is_quota_error(exc: Exception) -> bool:
+    """True if this looks like a 429 / quota exhausted error from the Gemini SDK."""
+    msg = str(exc)
+    if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
+        return True
+    code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    return code == 429
+
 
 def generate_structured(
     prompt: str,
@@ -122,18 +155,42 @@ def generate_structured(
     SDK takes care of converting it to Gemini's structured-output format.
     Returns the parsed JSON dict — caller validates with the Pydantic model
     so we get a single, predictable error path on schema drift.
+
+    On quota exhaustion (HTTP 429) we transparently fall back through
+    FALLBACK_MODELS so a single saturated daily limit doesn't kill the brief.
     """
-    response = _get_client().models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            temperature=temperature,
-            max_output_tokens=max_output_tokens,
-            response_mime_type="application/json",
-            response_schema=schema,
-        ),
+    client = _get_client()
+    config = types.GenerateContentConfig(
+        system_instruction=system,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        response_mime_type="application/json",
+        response_schema=schema,
     )
+
+    candidates = [model] + [m for m in FALLBACK_MODELS if m != model]
+    last_exc: Exception | None = None
+    response = None
+    for candidate in candidates:
+        try:
+            response = client.models.generate_content(
+                model=candidate, contents=prompt, config=config
+            )
+            if candidate != model:
+                logger.warning("primary model %s exhausted; succeeded on fallback %s", model, candidate)
+            break
+        except Exception as e:
+            last_exc = e
+            if not _is_quota_error(e):
+                raise
+            logger.warning("model %s hit quota: %s — trying next fallback", candidate, str(e)[:120])
+    if response is None:
+        # All candidates exhausted.
+        raise RuntimeError(
+            f"All Gemini models hit quota (tried: {', '.join(candidates)}). "
+            "Wait a few minutes for the per-minute limit to clear, or for the "
+            "daily limit to reset (Pacific midnight)."
+        ) from last_exc
 
     # Prefer parsed object if the SDK already validated it; otherwise parse text.
     parsed = getattr(response, "parsed", None)
