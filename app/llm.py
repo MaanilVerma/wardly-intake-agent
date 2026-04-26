@@ -24,14 +24,28 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-# Single source of model config. We default to gemini-2.5-flash-lite — same
-# JSON-Schema-constrained output as flash, but the free-tier daily quota is
-# ~10x higher (1000 RPD vs ~20-250 RPD on flash), which actually matters for
-# a take-home that runs eval tests + live calls + Loom takes off one key.
-# If quality on a specific call disappoints, override per-call via the
-# `model=` kwarg on chat_turn / generate_structured.
-DEFAULT_MODEL = "gemini-2.5-flash-lite"
-FALLBACK_MODELS = ("gemini-2.0-flash", "gemini-2.5-flash")
+# Single source of model config. We default to gemini-3.1-flash-lite-preview —
+# same JSON-Schema-constrained output as 2.5 flash, with 500 RPD on the free
+# tier (vs 20 RPD on 2.5 flash / flash-lite as of April 2026). That gap
+# matters when you're running eval tests + live calls + Loom takes off one
+# key. The 3.x-preview models also have fresher capabilities (improved
+# instruction following, better JSON adherence).
+#
+# The fallback chain runs in priority order on quota exhaustion:
+#   1. gemini-3.1-flash-lite-preview  — 500 RPD, primary
+#   2. gemini-3-flash                 — 20 RPD, secondary preview
+#   3. gemini-2.5-flash-lite          — 20 RPD, stable
+#   4. gemini-2.5-flash               — 20 RPD, stronger but smaller quota
+#
+# Models removed from the chain: gemini-2.0-flash and gemini-2.5-pro both
+# show 0/0 RPD on this account (not allocated) — keeping them in only
+# burned a network round-trip per fallback attempt.
+DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+FALLBACK_MODELS = (
+    "gemini-3-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+)
 DEFAULT_TEMPERATURE = 0.4
 DEFAULT_MAX_OUTPUT_TOKENS = 600
 # Bound any single Gemini call so a hung upstream can't tie up a request
@@ -140,13 +154,29 @@ def chat_turn(
     return text
 
 
-def _is_quota_error(exc: Exception) -> bool:
-    """True if this looks like a 429 / quota exhausted error from the Gemini SDK."""
+def _is_recoverable_model_error(exc: Exception) -> bool:
+    """True for errors where falling back to the next model is the right move.
+
+    Two cases:
+      1. Quota exhausted (429 / RESOURCE_EXHAUSTED) — daily or per-minute limit hit.
+      2. Model not found / not available (404 / NOT_FOUND / preview lapsed) —
+         we may have a stale name in FALLBACK_MODELS. Skip and try next.
+
+    Any other error (auth failure, schema invalid, network) propagates so we
+    don't paper over real bugs.
+    """
     msg = str(exc)
     if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
         return True
+    if "NOT_FOUND" in msg or "404" in msg or "is not found" in msg.lower():
+        return True
     code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
-    return code == 429
+    return code in (404, 429)
+
+
+# Keep the old name as an alias so existing call sites stay working without
+# a rename pass — both point at the same predicate now.
+_is_quota_error = _is_recoverable_model_error
 
 
 def generate_structured(
