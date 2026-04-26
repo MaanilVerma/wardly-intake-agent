@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from app.models import (
     Allergy,
@@ -162,17 +163,17 @@ def test_brief_round_trips_through_json():
 
 def test_chief_complaint_required_fields_enforced():
     """CC is the load-bearing field — missing verbatim or summary should fail."""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ChiefComplaint(verbatim="my belly hurts")  # type: ignore[call-arg]
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ChiefComplaint(summary="abdominal pain")  # type: ignore[call-arg]
 
 
 def test_severity_out_of_range_rejected():
     """0-10 is a clinical convention. 11/10 should not pass."""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         HPI(narrative="x", severity_now=11)
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         HPI(narrative="x", severity_worst=-1)
 
 
