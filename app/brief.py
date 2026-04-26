@@ -22,19 +22,13 @@ from app.models import (
 )
 from app.prompts import EXTRACTION_SYSTEM_PROMPT
 
-# Defense-in-depth: even with the extraction prompt forbidding placeholders,
-# Gemini occasionally emits "[AGE]-year-old female" in the HPI narrative.
-# Strip any [ALL_CAPS] token before validation.
-_PLACEHOLDER_RE = re.compile(r"\[[A-Z][A-Z_ ]*\](-)?")
-
 
 def _strip_placeholders(text: str | None) -> str | None:
-    """Defense-in-depth scrubber.
+    """Strip [ALL_CAPS] placeholders the LLM sometimes leaks into the HPI
+    ('a [AGE]-year-old female ...') and tidy the surrounding punctuation.
 
-    Removes [ALL_CAPS] placeholders the LLM occasionally leaks into the HPI
-    narrative ('a [AGE]-year-old female …') and patches up the surrounding
-    grammar so the resulting prose reads cleanly. Real fix is the extraction
-    prompt forbidding placeholders; this is the safety net.
+    The extraction prompt forbids these — this is the safety net for when
+    the model ignores it.
     """
     if not text:
         return text
@@ -62,10 +56,9 @@ def extract_from_transcript(
 ) -> ClinicalIntakeBrief:
     """Extract a structured clinical brief from a transcript.
 
-    The Gemini call is constrained by the ClinicalIntakeBrief schema, so the
-    result already conforms to the JSON shape we want. We re-validate with
-    Pydantic both as a belt-and-suspenders check (the SDK's `parsed` may
-    silently drop unknown fields) and to attach call_metadata.
+    The Gemini call is schema-constrained to ClinicalIntakeBrief, but we
+    still re-validate with Pydantic — the SDK's `parsed` can silently drop
+    unknown fields, and we always need to stitch on call_metadata after.
 
     `started_at` (or wall-clock now) is passed to the LLM as today's-date
     context so it can resolve relative phrases like "tomorrow at 2pm" into
