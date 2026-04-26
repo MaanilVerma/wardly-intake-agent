@@ -5,9 +5,12 @@ update both files together.
 """
 
 from __future__ import annotations
+import logging
 from datetime import datetime
 from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger(__name__)
 
 
 # ---------- leaf models ----------
@@ -186,7 +189,12 @@ class ClinicalIntakeBrief(BaseModel):
     def severity_now_le_worst(cls, v: HPI) -> HPI:
         if v.severity_now is not None and v.severity_worst is not None:
             if v.severity_now > v.severity_worst:
-                # don't raise — clinical data has noise; just normalize
+                # Noisy LLM output — normalize rather than reject, but log it
+                # so a clinician auditing the brief can see we touched the data.
+                logger.warning(
+                    "severity_now (%d) > severity_worst (%d); raising worst to match",
+                    v.severity_now, v.severity_worst,
+                )
                 v.severity_worst = v.severity_now
         return v
 
@@ -213,7 +221,7 @@ class ClinicalIntakeBrief(BaseModel):
 
         # Red flags FIRST if present — clinician must see these immediately
         if self.red_flags:
-            parts.append("## ⚠️ Red Flags\n")
+            parts.append("## Red Flags\n")
             for rf in self.red_flags:
                 parts.append(f"- **[{rf.severity.upper()}]** {rf.symptom}")
                 if rf.advised_action:
