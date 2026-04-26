@@ -728,4 +728,398 @@ _BRIEF_HTML_SHELL = """\
 """
 
 
-__all__ = ["render_brief", "render_markdown_fallback"]
+def render_brief_index(items: list[dict]) -> str:
+    """Render the list of all saved briefs as a single HTML page.
+
+    `items` is whatever `app.storage.list_briefs()` returns — already sorted
+    newest first. Each row links to `/briefs/{call_id}` (the chart view).
+
+    Empty state: friendly message with a link back to the intake page.
+    """
+    if not items:
+        body = (
+            '<section class="briefs-empty">'
+            '  <div class="briefs-empty-icon" aria-hidden="true">'
+            '    <svg viewBox="0 0 24 24" width="32" height="32">'
+            '      <path d="M5 4h11l3 3v13H5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'
+            '      <path d="M16 4v3h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>'
+            '    </svg>'
+            '  </div>'
+            '  <h2>No briefs yet</h2>'
+            '  <p>Once you complete an intake, the brief will land here.</p>'
+            '  <a class="btn btn-primary" href="/">Start an intake</a>'
+            '</section>'
+        )
+    else:
+        rows = "".join(_render_brief_row(item) for item in items)
+        body = (
+            '<header class="briefs-head">'
+            '  <div>'
+            f'    <h1>All briefs <span class="briefs-count">{len(items)}</span></h1>'
+            '    <p class="briefs-sub">Sorted newest first. Click any row to open the chart view.</p>'
+            '  </div>'
+            '  <a class="btn btn-primary" href="/">'
+            '    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M3 8h10m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            '    Start a new intake'
+            '  </a>'
+            '</header>'
+            f'<div class="briefs-list" role="list">{rows}</div>'
+        )
+
+    return _INDEX_HTML_SHELL.format(body=body, count=len(items))
+
+
+def _render_brief_row(item: dict) -> str:
+    call_id = _esc(item.get("call_id") or "")
+    name = item.get("patient_name") or "Unnamed patient"
+    summary = item.get("summary") or item.get("verbatim") or "(no chief complaint captured)"
+    summary = summary.strip().strip('"').strip("'")
+    if len(summary) > 140:
+        summary = summary[:137].rstrip() + "…"
+
+    when_abs, when_rel = _fmt_when(item.get("started_at"), item.get("mtime"))
+    visit_type = _VISIT_TYPE_LABELS.get(item.get("visit_type") or "", None)
+    duration = _fmt_duration(item.get("duration_sec")) if item.get("duration_sec") else None
+
+    severity = item.get("severity_worst")
+    severity_chip = ""
+    if isinstance(severity, int):
+        band = "good" if severity <= 3 else "ok" if severity <= 6 else "low"
+        severity_chip = (
+            f'<span class="bx-chip bx-chip-{band}" title="Worst severity reported">'
+            f'  <strong>{severity}/10</strong> worst'
+            '</span>'
+        )
+
+    redflag_chip = ""
+    rf_count = item.get("red_flag_count") or 0
+    if rf_count:
+        sev_key = (item.get("red_flag_severity") or "concern").lower()
+        sev_label, sev_class = _SEVERITY_LABELS.get(sev_key, ("Concern", "sev-concern"))
+        redflag_chip = (
+            f'<span class="bx-chip bx-chip-redflag {sev_class}" title="Red flag: {sev_label}">'
+            '  <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3 14V2l9 4-9 4" fill="currentColor"/></svg>'
+            f'  {rf_count} red flag{"s" if rf_count != 1 else ""} · {sev_label}'
+            '</span>'
+        )
+
+    completeness = item.get("completeness")
+    completeness_chip = ""
+    if isinstance(completeness, int):
+        band = "good" if completeness >= 80 else "ok" if completeness >= 60 else "low"
+        completeness_chip = (
+            f'<span class="bx-chip bx-chip-{band}" title="Completeness score">'
+            f'  {completeness}% complete'
+            '</span>'
+        )
+
+    visit_pill = (
+        f'<span class="bx-pill">{_esc(visit_type)}</span>' if visit_type else ""
+    )
+    duration_pill = (
+        f'<span class="bx-pill bx-pill-muted" title="Call duration">⏱ {_esc(duration)}</span>' if duration else ""
+    )
+
+    return (
+        f'<a class="bx-row" href="/briefs/{call_id}" role="listitem">'
+        '  <div class="bx-row-main">'
+        '    <div class="bx-when">'
+        f'      <span class="bx-when-rel">{_esc(when_rel)}</span>'
+        f'      <span class="bx-when-abs">{_esc(when_abs)}</span>'
+        '    </div>'
+        '    <div class="bx-body">'
+        '      <div class="bx-headline">'
+        f'        <span class="bx-name">{_esc(name)}</span>'
+        f'        {visit_pill}'
+        '      </div>'
+        f'      <p class="bx-summary">{_esc(summary)}</p>'
+        '      <div class="bx-meta">'
+        f'        {severity_chip}'
+        f'        {redflag_chip}'
+        f'        {completeness_chip}'
+        f'        {duration_pill}'
+        f'        <code class="bx-id">{call_id[:8]}…</code>'
+        '      </div>'
+        '    </div>'
+        '    <span class="bx-go" aria-hidden="true">'
+        '      <svg viewBox="0 0 16 16" width="14" height="14"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        '    </span>'
+        '  </div>'
+        '</a>'
+    )
+
+
+def _fmt_when(started_at: str | None, mtime: float | None) -> tuple[str, str]:
+    """Return (absolute label, relative label) — falls back to mtime."""
+    dt: datetime | None = None
+    if started_at:
+        try:
+            dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        except ValueError:
+            dt = None
+    if dt is None and mtime is not None:
+        dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
+    if dt is None:
+        return ("—", "—")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    abs_label = dt.strftime("%b %d, %Y · %H:%M UTC")
+    now = datetime.now(timezone.utc)
+    delta = now - dt
+    secs = int(delta.total_seconds())
+    if secs < 60:
+        rel = "just now"
+    elif secs < 3600:
+        m = secs // 60
+        rel = f"{m} min ago"
+    elif secs < 86_400:
+        h = secs // 3600
+        rel = f"{h} hr ago"
+    elif secs < 7 * 86_400:
+        d = secs // 86_400
+        rel = "yesterday" if d == 1 else f"{d} days ago"
+    else:
+        rel = dt.strftime("%b %d")
+    return (abs_label, rel)
+
+
+_INDEX_HTML_SHELL = """\
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0b1220" />
+<title>All briefs ({count}) — Wardly</title>
+<link rel="preconnect" href="https://rsms.me/" />
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+<link rel="stylesheet" href="/static/style.css" />
+<style>
+  /* Scoped to the briefs index page. Built on the existing style.css tokens
+     (--brand-*, --ink-*, --shadow-*, --radius-*) so it visually matches
+     the rest of the app without bloating the main stylesheet. */
+  .briefs-page {{
+    max-width: 980px;
+    margin: 0 auto;
+    padding: clamp(20px, 3vw, 36px) clamp(16px, 3vw, 32px) 56px;
+  }}
+  .briefs-head {{
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+  }}
+  .briefs-head h1 {{
+    margin: 0 0 4px 0;
+    font-size: clamp(22px, 2vw + 14px, 30px);
+    font-weight: 650;
+    letter-spacing: -0.018em;
+    color: var(--ink-900);
+  }}
+  .briefs-count {{
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--brand-50);
+    color: var(--brand-700);
+    font-size: 13px;
+    font-weight: 600;
+    vertical-align: 4px;
+  }}
+  .briefs-sub {{
+    margin: 0;
+    color: var(--ink-500);
+    font-size: 14px;
+  }}
+
+  .briefs-list {{
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }}
+  .bx-row {{
+    display: block;
+    background: var(--paper);
+    border: 1px solid var(--ink-100);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color var(--dur-2) var(--ease-out),
+                box-shadow var(--dur-2) var(--ease-out),
+                transform var(--dur-1) var(--ease-out);
+  }}
+  .bx-row:hover {{
+    border-color: var(--brand-100);
+    box-shadow: var(--shadow-md);
+  }}
+  .bx-row:active {{ transform: translateY(1px); }}
+  .bx-row-main {{
+    display: grid;
+    grid-template-columns: 130px 1fr auto;
+    gap: 18px;
+    align-items: center;
+    padding: 14px 18px;
+  }}
+  @media (max-width: 640px) {{
+    .bx-row-main {{ grid-template-columns: 1fr auto; }}
+    .bx-when {{ grid-row: 2; grid-column: 1 / -1; padding-top: 6px; border-top: 1px dashed var(--ink-100); }}
+  }}
+  .bx-when {{
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--ink-600);
+    font-size: 13px;
+  }}
+  .bx-when-rel {{
+    font-weight: 600;
+    color: var(--ink-700);
+  }}
+  .bx-when-abs {{
+    font-size: 11.5px;
+    color: var(--ink-500);
+    font-feature-settings: 'tnum';
+  }}
+  .bx-body {{ min-width: 0; }}
+  .bx-headline {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }}
+  .bx-name {{
+    font-weight: 600;
+    color: var(--ink-900);
+    font-size: 15px;
+    letter-spacing: -0.005em;
+  }}
+  .bx-summary {{
+    margin: 0 0 8px 0;
+    color: var(--ink-700);
+    font-size: 14px;
+    line-height: 1.45;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }}
+  .bx-meta {{
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    font-size: 12px;
+  }}
+  .bx-id {{
+    font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+    font-size: 11px;
+    color: var(--ink-400);
+  }}
+  .bx-go {{
+    display: inline-grid;
+    place-items: center;
+    color: var(--ink-300);
+    transition: color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+  }}
+  .bx-row:hover .bx-go {{
+    color: var(--brand-600);
+    transform: translateX(2px);
+  }}
+
+  .bx-pill {{
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--ink-100);
+    color: var(--ink-700);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }}
+  .bx-pill-muted {{
+    background: transparent;
+    color: var(--ink-500);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+  }}
+
+  .bx-chip {{
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px 2px 8px;
+    border-radius: 999px;
+    background: var(--ink-50);
+    color: var(--ink-700);
+    border: 1px solid var(--ink-100);
+    font-weight: 500;
+  }}
+  .bx-chip-good {{ background: var(--good-50); color: var(--good-600); border-color: #bbf7d0; }}
+  .bx-chip-ok   {{ background: var(--warn-50); color: var(--warn-700); border-color: #fde68a; }}
+  .bx-chip-low  {{ background: var(--danger-50); color: var(--danger-700); border-color: #fecaca; }}
+  .bx-chip-redflag.sev-emergent {{ background: var(--danger-50); color: var(--danger-700); border-color: #fecaca; font-weight: 600; }}
+  .bx-chip-redflag.sev-urgent   {{ background: var(--warn-50); color: var(--warn-700); border-color: #fde68a; font-weight: 600; }}
+  .bx-chip-redflag.sev-concern  {{ background: var(--brand-50); color: var(--brand-700); border-color: var(--brand-100); font-weight: 600; }}
+
+  .briefs-empty {{
+    text-align: center;
+    padding: 80px 32px;
+    background: var(--paper);
+    border: 1px dashed var(--ink-200);
+    border-radius: var(--radius-xl);
+    color: var(--ink-500);
+  }}
+  .briefs-empty-icon {{
+    display: inline-grid;
+    place-items: center;
+    width: 56px; height: 56px;
+    border-radius: 16px;
+    background: var(--brand-50);
+    color: var(--brand-600);
+    margin-bottom: 14px;
+  }}
+  .briefs-empty h2 {{
+    margin: 0 0 6px 0;
+    color: var(--ink-900);
+    font-size: 18px;
+  }}
+  .briefs-empty p {{ margin: 0 0 16px 0; }}
+</style>
+</head>
+<body class="brief-view">
+<header class="topbar" role="banner">
+  <div class="topbar-left">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="18" height="18"><path d="M6 8h4l3 12 3-9 3 9 3-12h4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="brand-name">Wardly</span>
+    </div>
+    <span class="brand-divider" aria-hidden="true"></span>
+    <span class="brand-product">All Briefs</span>
+  </div>
+  <div class="topbar-right">
+    <a class="btn" href="/">
+      <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M10 12 6 8l4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      New intake
+    </a>
+  </div>
+</header>
+<main class="briefs-page">
+{body}
+</main>
+</body>
+</html>
+"""
+
+
+__all__ = ["render_brief", "render_markdown_fallback", "render_brief_index"]

@@ -20,8 +20,8 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv()
 
 from app.chat import router as chat_router
-from app.render import render_brief, render_markdown_fallback
-from app.storage import read_json, read_markdown
+from app.render import render_brief, render_brief_index, render_markdown_fallback
+from app.storage import list_briefs, read_json, read_markdown
 from app.webhooks import router as webhooks_router
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,23 @@ def index() -> FileResponse:
 @app.get("/healthz", include_in_schema=False)
 def healthz() -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+@app.get("/briefs/", response_class=HTMLResponse)
+@app.get("/briefs", response_class=HTMLResponse, include_in_schema=False)
+def list_all_briefs() -> HTMLResponse:
+    """List every saved brief, newest first.
+
+    Reads `briefs/*.json` directly — single source of truth, always
+    current — and renders a clickable list. Each row links to the chart
+    view at `/briefs/{call_id}`.
+
+    Note: this route MUST be defined before `/briefs/{call_id}` or FastAPI
+    will route `/briefs/` to the detail view with call_id="" (which then
+    fails the safe-call_id validator).
+    """
+    items = list_briefs()
+    return HTMLResponse(render_brief_index(items))
 
 
 @app.get("/briefs/{call_id}", response_class=HTMLResponse)
