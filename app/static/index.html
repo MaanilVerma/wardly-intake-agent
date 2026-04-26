@@ -3,81 +3,242 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1220" />
   <title>Wardly · Pre-Visit Intake</title>
+  <link rel="preconnect" href="https://rsms.me/" />
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">W</span>
-      <span class="brand-name">Wardly</span>
-      <span class="brand-sub">Pre-Visit Intake</span>
+  <header class="topbar" role="banner">
+    <div class="topbar-left">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="18" height="18"><path d="M6 8h4l3 12 3-9 3 9 3-12h4" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="brand-name">Wardly</span>
+      </div>
+      <span class="brand-divider" aria-hidden="true"></span>
+      <span class="brand-product">Pre-Visit Intake</span>
     </div>
-    <div class="topbar-actions">
-      <label class="toggle">
+
+    <div class="topbar-right">
+      <span id="status-pill" class="pill pill-idle" title="Connection status">
+        <span class="pill-dot"></span>
+        <span class="pill-label">Ready</span>
+        <span class="pill-sep" aria-hidden="true">·</span>
+        <span id="session-timer" class="pill-timer" aria-label="Session duration">00:00</span>
+      </span>
+      <label class="toggle" title="Read agent replies aloud">
         <input id="auto-speak" type="checkbox" checked />
-        <span>Speak responses</span>
+        <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+        <span class="toggle-label">Voice</span>
       </label>
+      <button id="end" type="button" class="btn btn-ghost-danger" disabled>
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+        End intake
+      </button>
     </div>
   </header>
 
-  <main class="shell">
-    <section class="panel">
-      <div id="chat" class="chat" aria-live="polite" aria-label="Conversation">
-        <div class="welcome">
-          <h1>Pre-Visit Intake</h1>
-          <p>
-            This is a simulated patient intake. Click <strong>Start intake</strong>
-            and the assistant will walk you through the chief complaint,
-            history of present illness, and a targeted review of systems. At
-            the end, it generates a structured clinical brief.
-          </p>
-          <p class="welcome-fine">
-            Voice input requires Chrome or Edge. If your browser doesn't
-            support it, just type — the agent works the same way.
-          </p>
+  <main class="shell" role="main">
+    <!-- ================= Chat panel ================= -->
+    <section class="panel chat-panel" aria-label="Conversation">
+      <div class="panel-header">
+        <div class="panel-title">
+          <h2>Conversation</h2>
+          <span class="panel-sub">Secure · HIPAA-aligned · End-to-end logged</span>
+        </div>
+        <div class="panel-header-actions">
+          <span class="badge badge-shield">
+            <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M8 1.5 2.5 3.5v4.2c0 3.4 2.4 6.4 5.5 7.3 3.1-.9 5.5-3.9 5.5-7.3V3.5L8 1.5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="m5.6 8.2 1.7 1.7L10.6 6.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Encrypted
+          </span>
         </div>
       </div>
 
-      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <div id="chat" class="chat" aria-live="polite">
+        <div class="welcome" id="welcome">
+          <div class="welcome-icon" aria-hidden="true">
+            <svg viewBox="0 0 28 28" width="22" height="22"><path d="M14 3a11 11 0 0 1 9.4 16.7L25 25l-5.3-1.6A11 11 0 1 1 14 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <h1 class="welcome-title">Let's prepare for your visit</h1>
+          <p class="welcome-lead">
+            A guided five-minute conversation. We'll capture your symptoms,
+            history, and red flags — then hand a structured brief to your
+            doctor before you arrive.
+          </p>
+          <button id="start" type="button" class="btn btn-primary btn-lg">
+            Start intake
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8h10m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <p class="welcome-fine">
+            <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M8 1.5 2.5 3.5v4.2c0 3.4 2.4 6.4 5.5 7.3 3.1-.9 5.5-3.9 5.5-7.3V3.5L8 1.5Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+            Your data is encrypted in transit and at rest. Not a diagnosis —
+            the agent flags red-flag symptoms in real time.
+          </p>
+        </div>
 
-      <form id="composer" class="composer" autocomplete="off">
-        <button id="mic" type="button" class="btn btn-mic" aria-label="Hold to speak" disabled>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" fill="currentColor"/>
-            <path d="M19 11a1 1 0 1 0-2 0 5 5 0 1 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21h-3a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-3.08A7 7 0 0 0 19 11Z" fill="currentColor"/>
-          </svg>
-        </button>
-        <input
-          id="text-input"
-          class="text-input"
-          type="text"
-          placeholder="Click Start intake to begin…"
-          aria-label="Your message"
-          disabled
-        />
-        <button id="send" type="submit" class="btn btn-send" disabled>Send</button>
-      </form>
-
-      <div class="actions">
-        <button id="start" type="button" class="btn btn-primary">Start intake</button>
-        <button id="end" type="button" class="btn btn-danger" disabled>End intake</button>
+        <div class="day-divider" id="day-divider" hidden>
+          <span>Today</span>
+        </div>
       </div>
+
+      <!-- AI suggestions tray -->
+      <div id="suggestions" class="suggestions" hidden aria-label="Suggested replies">
+        <div class="suggestions-head">
+          <span class="suggestions-title">
+            <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M8 1.5 9.4 5.6l4.1.3-3.2 2.7 1 4-3.3-2.3-3.3 2.3 1-4-3.2-2.7 4.1-.3L8 1.5Z" fill="currentColor"/></svg>
+            Suggested replies
+          </span>
+          <button id="suggestions-close" type="button" class="icon-btn" aria-label="Dismiss suggestions">
+            <svg viewBox="0 0 16 16" width="11" height="11"><path d="m4 4 8 8m0-8-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div id="suggestion-cards" class="suggestion-cards"></div>
+      </div>
+
+      <!-- Composer -->
+      <form id="composer" class="composer" autocomplete="off">
+        <div class="composer-shell">
+          <button type="button" class="icon-btn icon-btn-lg" id="suggest-btn" aria-label="Generate suggested replies" disabled>
+            <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M10 2v3M10 15v3M2 10h3M15 10h3M4 4l2 2M14 14l2 2M16 4l-2 2M6 14l-2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="10" r="2.5" fill="currentColor"/></svg>
+          </button>
+          <input
+            id="text-input"
+            class="text-input"
+            type="text"
+            placeholder="Click Start intake to begin…"
+            aria-label="Your message"
+            disabled
+          />
+          <button id="mic" type="button" class="icon-btn icon-btn-lg" aria-label="Hold to speak" disabled>
+            <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M10 2a2.5 2.5 0 0 0-2.5 2.5v5a2.5 2.5 0 0 0 5 0v-5A2.5 2.5 0 0 0 10 2Z" fill="currentColor"/><path d="M15 9.5a5 5 0 0 1-10 0M10 14.5V18M7 18h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+          <button id="send" type="submit" class="send-btn" disabled aria-label="Send message">
+            <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M10 16V4m0 0L5 9m5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="composer-foot">
+          <span id="status" class="composer-status" role="status" aria-live="polite"></span>
+          <span class="composer-hints">
+            <kbd>Enter</kbd> to send
+            <span class="hint-sep">·</span>
+            <kbd>✨</kbd> for suggestions
+          </span>
+        </div>
+      </form>
     </section>
 
-    <aside class="meta">
-      <h2>How this works</h2>
-      <ol>
-        <li>Click <strong>Start intake</strong>.</li>
-        <li>Answer the agent's questions one at a time, by voice or by text.</li>
-        <li>Click <strong>End intake</strong> when you're done. We generate a structured brief and open it.</li>
-      </ol>
-      <p class="meta-note">
-        The agent flags red-flag symptoms (chest pain with radiation, stroke
-        signs, etc.) in real time and instructs you to seek emergency care.
-        It does not diagnose or give medical advice — it gathers structured
-        information for the clinician.
-      </p>
+    <!-- ================= Live brief panel ================= -->
+    <aside class="panel brief-side" aria-label="Live clinical brief">
+      <div class="panel-header">
+        <div class="panel-title">
+          <h2>Live brief</h2>
+          <span class="panel-sub">Updates as you talk</span>
+        </div>
+        <span id="brief-progress" class="progress-chip">0 / 6</span>
+      </div>
+
+      <!-- Empty state shown until intake starts -->
+      <div id="brief-empty" class="brief-empty">
+        <div class="brief-empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="22" height="22"><path d="M8 4h12l6 6v18H8V4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M20 4v6h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 16h12M12 20h8M12 24h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </div>
+        <p class="brief-empty-title">Your brief will fill in here</p>
+        <p class="brief-empty-sub">As you answer the agent's questions, structured fields appear in real time. Red-flag symptoms are highlighted instantly.</p>
+      </div>
+
+      <div id="brief-fields" class="brief-side-body" hidden>
+        <section class="field" data-field="patient">
+          <header>
+            <span class="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="13" height="13"><circle cx="8" cy="5.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 13.5c.6-2.6 2.7-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <span class="field-name">Patient &amp; visit</span>
+            <span class="field-state">Pending</span>
+          </header>
+          <p class="field-value">Name · appointment · visit type</p>
+        </section>
+
+        <section class="field" data-field="chief">
+          <header>
+            <span class="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="13" height="13"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <span class="field-name">Chief complaint</span>
+            <span class="field-state">Pending</span>
+          </header>
+          <p class="field-value">Awaiting first response</p>
+        </section>
+
+        <section class="field" data-field="hpi">
+          <header>
+            <span class="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="13" height="13"><path d="M2 8h3l2-5 2 10 2-5h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="field-name">History of present illness</span>
+            <span class="field-state">Pending</span>
+          </header>
+          <p class="field-value">Onset · severity · character · triggers</p>
+        </section>
+
+        <section class="field" data-field="ros">
+          <header>
+            <span class="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="13" height="13"><rect x="2" y="3" width="12" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <span class="field-name">Review of systems</span>
+            <span class="field-state">Pending</span>
+          </header>
+          <p class="field-value">Targeted to chief complaint</p>
+        </section>
+
+        <section class="field" data-field="meds">
+          <header>
+            <span class="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="13" height="13"><rect x="2.5" y="5" width="11" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v6" stroke="currentColor" stroke-width="1.5"/></svg>
+            </span>
+            <span class="field-name">Medications &amp; allergies</span>
+            <span class="field-state">Pending</span>
+          </header>
+          <p class="field-value">Current meds · known allergies</p>
+        </section>
+
+        <section class="field field-redflag" data-field="redflag">
+          <header>
+            <span class="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="13" height="13"><path d="M3 2v12M3 3h8l-1.5 2.5L11 8H3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+            </span>
+            <span class="field-name">Red-flag screen</span>
+            <span class="field-state">Pending</span>
+          </header>
+          <p class="field-value">Cardiac · neuro · respiratory · GI</p>
+        </section>
+      </div>
+
+      <!-- Session details card (always present, fills vertical space) -->
+      <div class="session-card">
+        <div class="session-card-row">
+          <span class="session-card-label">Session</span>
+          <span id="session-id-short" class="session-card-value mono">—</span>
+        </div>
+        <div class="session-card-row">
+          <span class="session-card-label">Duration</span>
+          <span id="session-duration" class="session-card-value mono">00:00</span>
+        </div>
+        <div class="session-card-row">
+          <span class="session-card-label">Turns</span>
+          <span id="session-turns" class="session-card-value mono">0</span>
+        </div>
+      </div>
+
+      <footer class="brief-side-foot">
+        <p class="foot-note">
+          The agent does not diagnose or give medical advice. It collects
+          structured information for the clinician.
+        </p>
+      </footer>
     </aside>
   </main>
 
