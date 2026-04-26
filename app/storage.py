@@ -27,12 +27,8 @@ def _validate_call_id(call_id: str) -> None:
         raise ValueError(f"unsafe call_id: {call_id!r}")
 
 
-def _ensure_dir() -> None:
-    BRIEFS_DIR.mkdir(parents=True, exist_ok=True)
-
-
 def _atomic_write(path: Path, data: str | bytes) -> None:
-    """Write to <path>.tmp, then rename. Survives mid-write crashes."""
+    """Write to <path>.tmp, then rename — survives mid-write crashes."""
     tmp = path.with_suffix(path.suffix + ".tmp")
     mode = "wb" if isinstance(data, bytes) else "w"
     encoding = None if isinstance(data, bytes) else "utf-8"
@@ -42,9 +38,8 @@ def _atomic_write(path: Path, data: str | bytes) -> None:
 
 
 def save_json(call_id: str, data: dict) -> Path:
-    """Write the validated brief as JSON. Returns the path written."""
     _validate_call_id(call_id)
-    _ensure_dir()
+    BRIEFS_DIR.mkdir(parents=True, exist_ok=True)
     path = BRIEFS_DIR / f"{call_id}.json"
     _atomic_write(path, json.dumps(data, indent=2, default=str))
     logger.info("wrote %s", path)
@@ -52,9 +47,8 @@ def save_json(call_id: str, data: dict) -> Path:
 
 
 def save_markdown(call_id: str, md: str) -> Path:
-    """Write the clinician-facing Markdown brief."""
     _validate_call_id(call_id)
-    _ensure_dir()
+    BRIEFS_DIR.mkdir(parents=True, exist_ok=True)
     path = BRIEFS_DIR / f"{call_id}.md"
     _atomic_write(path, md)
     logger.info("wrote %s", path)
@@ -62,10 +56,9 @@ def save_markdown(call_id: str, md: str) -> Path:
 
 
 def save_transcript(call_id: str, text: str) -> Path:
-    """Write the raw transcript that produced the brief — useful for debugging
-    and for re-running extraction offline."""
+    """Persist the raw transcript so we can re-run extraction offline."""
     _validate_call_id(call_id)
-    _ensure_dir()
+    BRIEFS_DIR.mkdir(parents=True, exist_ok=True)
     path = BRIEFS_DIR / f"{call_id}.transcript.txt"
     _atomic_write(path, text)
     logger.info("wrote %s", path)
@@ -73,7 +66,6 @@ def save_transcript(call_id: str, text: str) -> Path:
 
 
 def read_markdown(call_id: str) -> str | None:
-    """Return the Markdown brief for `call_id`, or None if not found."""
     _validate_call_id(call_id)
     path = BRIEFS_DIR / f"{call_id}.md"
     if not path.is_file():
@@ -82,7 +74,6 @@ def read_markdown(call_id: str) -> str | None:
 
 
 def read_json(call_id: str) -> dict | None:
-    """Return the structured brief JSON for `call_id`, or None if not found."""
     _validate_call_id(call_id)
     path = BRIEFS_DIR / f"{call_id}.json"
     if not path.is_file():
