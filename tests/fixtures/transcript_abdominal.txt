@@ -1,6 +1,12 @@
 Agent: Hi, this is the intake assistant for the clinic. Before your appointment I'd like to ask a few questions so the doctor knows what's going on. This will take about five to seven minutes. Is now a good time?
 Patient: Yeah, that's fine.
-Agent: Great. To start — what's the main reason you're coming in today?
+Agent: Great. Can I confirm your name?
+Patient: Sarah Chen.
+Agent: Thanks, Sarah. And just to confirm — when is your appointment?
+Patient: Tomorrow at 2 PM.
+Agent: Got it. Is this a new visit, a follow-up, or something more urgent?
+Patient: It's a follow-up.
+Agent: To start — what's the main reason you're coming in today?
 Patient: I've got this sharp pain in my right side, kind of low down. Started a couple days ago and it's not really going away.
 Agent: Got it — sharp pain on the right lower side, started a couple days ago. When exactly did it start?
 Patient: Tuesday morning. I noticed it when I was making coffee.
@@ -32,7 +38,13 @@ Agent: Any change in appetite?
 Patient: Not really.
 Agent: Any burning when you urinate, going more often, or pain in your back near your kidneys?
 Patient: Nope, none of that.
-Agent: Okay, let me make sure I have this right. You're coming in today for sharp pain in your right lower side that started Tuesday morning. It comes and goes, worse with eating and when you press on it, sometimes radiates to your back, four out of ten right now and seven at its worst. Some mild nausea, no vomiting, no fever. Ibuprofen didn't help. First time having this. Did I miss anything?
+Agent: Are there any ongoing health conditions the doctor should know about — anything like high blood pressure, diabetes, asthma?
+Patient: I have hypothyroidism, but it's stable.
+Agent: Are you taking any medications right now?
+Patient: Just levothyroxine, 50 micrograms, every morning.
+Agent: Any drug allergies?
+Patient: Penicillin, gives me a rash.
+Agent: Okay, Sarah, let me make sure I have this right. You're coming in tomorrow at 2 PM for sharp pain in your right lower side that started Tuesday morning. It comes and goes, worse with eating and when you press on it, sometimes radiates to your back, four out of ten right now and seven at its worst. Some mild nausea, no vomiting, no fever. Ibuprofen didn't help. First time having this. Did I miss anything?
 Patient: That sounds right. One thing — I've been pretty stressed at work lately. I don't know if that matters, but I figured I'd mention it.
 Agent: Got it, I'll pass that along. Anything else you want the doctor to know before your visit?
 Patient: No, I think that covers it.

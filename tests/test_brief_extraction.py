@@ -60,6 +60,30 @@ def test_abdominal_pain_extraction(transcript_abdominal: str):
         "abdominal-pain transcript should not produce an emergent red flag"
     )
 
+    # Phase 0 verification: name + appointment + visit type were spoken — should
+    # appear in patient_identifiers.
+    pid = brief.patient_identifiers
+    assert pid is not None, "patient_identifiers must be populated when fixture states them"
+    assert pid.name and "Sarah" in pid.name, f"expected name to capture 'Sarah', got {pid.name!r}"
+    assert pid.appointment_time, "appointment_time must be captured"
+    assert pid.visit_type == "follow_up", f"expected 'follow_up', got {pid.visit_type!r}"
+
+    # Phase 4 quick history: PMH + meds + allergies were all asked.
+    assert brief.past_medical_history, "PMH should include hypothyroidism per fixture"
+    assert any("levothyroxine" in m.name.lower() for m in brief.current_medications), (
+        f"meds should include levothyroxine; got {[m.name for m in brief.current_medications]}"
+    )
+    assert any("penicillin" in a.substance.lower() for a in brief.allergies), (
+        f"allergies should include penicillin; got {[a.substance for a in brief.allergies]}"
+    )
+
+    # Completeness should be solid for this rich fixture — most fields populated.
+    assert brief.completeness is not None
+    assert brief.completeness.score >= 70, (
+        f"expected completeness ≥ 70 for the rich fixture, got {brief.completeness.score} "
+        f"(missing: {brief.completeness.missing_fields})"
+    )
+
 
 def test_chest_pain_redflag_extraction(transcript_chest_pain_redflag: str):
     brief = extract_from_transcript(transcript_chest_pain_redflag, call_id="eval-cp-001")

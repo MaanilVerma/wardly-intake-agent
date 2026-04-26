@@ -11,14 +11,22 @@ from datetime import datetime, timezone
 import pytest
 
 from app.models import (
+    Allergy,
     CallMetadata,
     ChiefComplaint,
+    ClinicianNotes,
     ClinicalIntakeBrief,
+    Completeness,
     HPI,
+    ICD10Candidate,
+    Medication,
     PatientDemographics,
+    PatientIdentifiers,
     RedFlag,
     ROS,
     ROSSystem,
+    SocialHistory,
+    compute_completeness,
 )
 
 
@@ -166,3 +174,100 @@ def test_severity_out_of_range_rejected():
         HPI(narrative="x", severity_now=11)
     with pytest.raises(Exception):
         HPI(narrative="x", severity_worst=-1)
+
+
+# ---------- Phase 4 extensions ----------
+
+def test_completeness_minimal_brief_gives_low_score():
+    """A bare CC + 1-line HPI should not score high — too many gaps."""
+    brief = _minimal_brief()
+    c = compute_completeness(brief)
+    # CC verbatim + summary + (a too-short narrative) = 15 pts at most.
+    assert c.score <= 25
+    assert "patient_identifiers.name" in c.missing_fields
+    assert "ros.coverage" in c.missing_fields
+
+
+def test_completeness_full_brief_scores_high():
+    """A populated brief covering CC/HPI/ROS/Patient/PMH/Meds/Allergies/AI should be ≥80%."""
+    brief = ClinicalIntakeBrief(
+        chief_complaint=ChiefComplaint(verbatim="my belly hurts", summary="RLQ pain x 2 days"),
+        hpi=HPI(
+            narrative="Patient is a 47yo F reporting 2 days of RLQ pain, 7/10 worst, intermittent post-prandial.",
+            onset="2 days ago",
+            character="sharp",
+            severity_now=4,
+            severity_worst=7,
+            timing="intermittent",
+        ),
+        ros=ROS(
+            constitutional=ROSSystem(negatives=["no fever"]),
+            gi=ROSSystem(positives=["nausea"]),
+        ),
+        patient_identifiers=PatientIdentifiers(
+            name="Sarah Chen",
+            appointment_time="tomorrow at 2pm",
+            visit_type="follow_up",
+        ),
+        past_medical_history=["hypertension"],
+        current_medications=[Medication(name="lisinopril", dose="10mg", frequency="daily")],
+        allergies=[Allergy(substance="penicillin", reaction="rash")],
+        clinician_notes=ClinicianNotes(differential_considerations=["consider appendicitis"]),
+        icd10_candidates=[ICD10Candidate(code="R10.31", description="RLQ abdominal pain")],
+    )
+    c = compute_completeness(brief)
+    assert c.score >= 80, f"expected ≥80, got {c.score}, missing={c.missing_fields}"
+
+
+def test_completeness_score_capped_at_100():
+    """Defensive: even if every weight contributes, score ≤ 100."""
+    brief = ClinicalIntakeBrief(
+        chief_complaint=ChiefComplaint(verbatim="x", summary="y"),
+        hpi=HPI(narrative="A long enough HPI narrative to satisfy the 30-char threshold for completeness."),
+        ros=ROS(),
+    )
+    c = compute_completeness(brief)
+    assert 0 <= c.score <= 100
+
+
+def test_completeness_visit_type_unknown_does_not_count():
+    """visit_type='unknown' is the explicit fallback — shouldn't credit completeness."""
+    brief = _minimal_brief(
+        patient_identifiers=PatientIdentifiers(name="X", visit_type="unknown")
+    )
+    c = compute_completeness(brief)
+    assert "patient_identifiers.visit_type" in c.missing_fields
+
+
+def test_clinician_notes_is_empty_helper():
+    assert ClinicianNotes().is_empty()
+    assert not ClinicianNotes(differential_considerations=["consider X"]).is_empty()
+    assert not ClinicianNotes(suggested_followups=["ask about Y"]).is_empty()
+
+
+def test_brief_round_trips_with_phase4_fields():
+    """Round-trip a fully-populated brief through JSON and back."""
+    original = ClinicalIntakeBrief(
+        chief_complaint=ChiefComplaint(verbatim="x", summary="y"),
+        hpi=HPI(narrative="A clinically meaningful narrative goes here for a sound test."),
+        ros=ROS(),
+        patient_identifiers=PatientIdentifiers(name="Sarah", visit_type="urgent"),
+        current_medications=[Medication(name="metformin", dose="500mg", frequency="BID")],
+        allergies=[Allergy(substance="latex")],
+        social_history=SocialHistory(smoking_status="never", alcohol_use="rare"),
+        clinician_notes=ClinicianNotes(
+            differential_considerations=["consider X"],
+            suggested_followups=["ask about Y"],
+        ),
+        icd10_candidates=[ICD10Candidate(code="R10.9", description="Unspecified abdominal pain")],
+        completeness=Completeness(score=72, missing_fields=["pmh"]),
+    )
+    payload = original.model_dump_json()
+    restored = ClinicalIntakeBrief.model_validate_json(payload)
+    assert restored.patient_identifiers.name == "Sarah"
+    assert restored.patient_identifiers.visit_type == "urgent"
+    assert restored.current_medications[0].name == "metformin"
+    assert restored.allergies[0].substance == "latex"
+    assert restored.social_history.smoking_status == "never"
+    assert restored.icd10_candidates[0].code == "R10.9"
+    assert restored.completeness.score == 72
