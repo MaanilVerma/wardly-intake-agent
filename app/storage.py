@@ -81,10 +81,20 @@ def read_markdown(call_id: str) -> str | None:
     return path.read_text(encoding="utf-8")
 
 
+def read_json(call_id: str) -> dict | None:
+    """Return the structured brief JSON for `call_id`, or None if not found."""
+    _validate_call_id(call_id)
+    path = BRIEFS_DIR / f"{call_id}.json"
+    if not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 __all__ = [
     "BRIEFS_DIR",
     "save_json",
     "save_markdown",
     "save_transcript",
     "read_markdown",
+    "read_json",
 ]
