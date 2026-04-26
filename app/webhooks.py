@@ -13,8 +13,10 @@ share one extraction path.
 """
 
 from __future__ import annotations
+import hmac
 import json
 import logging
+import os
 import threading
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -28,6 +30,43 @@ from app.storage import save_json, save_markdown, save_transcript
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook", tags=["vapi"])
+
+# Optional shared secret for Vapi webhooks. When set, every request must carry
+# the same value in `X-Vapi-Secret` (or the legacy `x-vapi-signature` header)
+# or it's rejected. Unset is allowed for local dev/take-home; we log a single
+# WARNING at startup so it's clear we're running unauthenticated.
+_VAPI_WEBHOOK_SECRET = os.environ.get("VAPI_WEBHOOK_SECRET", "")
+if not _VAPI_WEBHOOK_SECRET:
+    logger.warning(
+        "VAPI_WEBHOOK_SECRET is not set — /webhook/* endpoints accept any caller. "
+        "Set it in .env for any non-local deployment."
+    )
+
+
+def _verify_vapi_secret(request: Request) -> bool:
+    """Return True if the request is allowed.
+
+    No secret configured → allow (local dev). Secret set → require it on the
+    request via header. Constant-time compare to avoid timing oracles.
+    """
+    if not _VAPI_WEBHOOK_SECRET:
+        return True
+    presented = (
+        request.headers.get("x-vapi-secret")
+        or request.headers.get("x-vapi-signature")
+        or ""
+    )
+    return hmac.compare_digest(presented, _VAPI_WEBHOOK_SECRET)
+
+
+async def _read_json_safe(request: Request) -> Optional[dict]:
+    """Parse the request body as JSON. Return None on any parse failure
+    so callers can ack with a 200 (Vapi drops anything else)."""
+    try:
+        return await request.json()
+    except Exception as e:
+        logger.warning("webhook body was not valid JSON: %s", str(e)[:120])
+        return None
 
 
 # ---- in-memory red-flag store --------------------------------------------
@@ -69,8 +108,6 @@ def _tool_results(items: list[dict[str, str]]) -> dict:
         })
     return {"results": out}
 
-
-# ---- helpers --------------------------------------------------------------
 
 def _extract_tool_call_list(message: dict[str, Any]) -> list[dict[str, Any]]:
     """Vapi has used multiple field names over time: `toolCallList` (older)
@@ -129,8 +166,6 @@ def _parse_iso(value: Any) -> Optional[datetime]:
         return None
 
 
-# ---- routes ---------------------------------------------------------------
-
 @router.post("/tool-call")
 async def tool_call(request: Request) -> dict:
     """Synchronously ack tool calls. Records flag_red_flag invocations so the
@@ -138,7 +173,12 @@ async def tool_call(request: Request) -> dict:
 
     Always returns HTTP 200 — Vapi silently drops any other status code.
     """
-    body = await request.json()
+    if not _verify_vapi_secret(request):
+        logger.warning("tool-call rejected: bad/missing webhook secret")
+        return _tool_results([])
+    body = await _read_json_safe(request)
+    if body is None:
+        return _tool_results([])
     logger.debug("tool-call payload: %s", json.dumps(body)[:2000])
 
     message = body.get("message") or {}
@@ -191,7 +231,12 @@ async def end_of_call(request: Request, background: BackgroundTasks) -> dict:
     """Receive the end-of-call report. Save the transcript synchronously
     (cheap, no LLM), schedule brief extraction in the background, and
     return 200 immediately so Vapi doesn't hit its webhook timeout."""
-    body = await request.json()
+    if not _verify_vapi_secret(request):
+        logger.warning("end-of-call rejected: bad/missing webhook secret")
+        return {"status": "ok"}
+    body = await _read_json_safe(request)
+    if body is None:
+        return {"status": "ok"}
     logger.debug("end-of-call payload: %s", json.dumps(body)[:2000])
 
     message = body.get("message") or {}
