@@ -142,6 +142,102 @@
         "pregnancy_status": { "type": ["string", "null"], "enum": ["pregnant", "not_pregnant", "unknown", "n/a", null] }
       }
     },
+    "patient_identifiers": {
+      "type": "object",
+      "description": "Patient identification + visit context captured in the Phase 0 verification step at the top of the call.",
+      "additionalProperties": false,
+      "properties": {
+        "name":               { "type": ["string", "null"], "description": "Patient's name as they stated it. Verbatim where possible." },
+        "date_of_birth":      { "type": ["string", "null"], "description": "If captured, ISO date or the patient's phrasing (e.g. 'March 12, 1978')." },
+        "preferred_pronouns": { "type": ["string", "null"], "description": "e.g. 'she/her', 'he/him', 'they/them'." },
+        "appointment_time":     { "type": ["string", "null"], "description": "Verbatim — the patient's own phrasing, e.g. 'tomorrow at 2 PM', 'next Tuesday morning'." },
+        "appointment_time_iso": { "type": ["string", "null"], "description": "Resolved ISO 8601 datetime (e.g. '2026-04-27T14:00:00'). Computed from `appointment_time` using today's date as the anchor — see system instruction. Null only if the time is genuinely ambiguous (e.g. 'sometime next week')." },
+        "visit_type":         { "type": ["string", "null"], "enum": ["new_patient", "follow_up", "urgent", "telehealth", "unknown", null] },
+        "reason_for_visit_today": { "type": ["string", "null"], "description": "One-line context for *why today* (e.g. 'symptoms got worse overnight'). Different from the chief complaint." }
+      }
+    },
+    "past_medical_history": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Named chronic conditions the patient reports (e.g. 'hypertension', 'type 2 diabetes', 'asthma'). Empty if none discussed."
+    },
+    "current_medications": {
+      "type": "array",
+      "description": "What the patient is currently taking. Capture name; dose/frequency if offered. Empty if none discussed.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name":      { "type": "string" },
+          "dose":      { "type": ["string", "null"] },
+          "frequency": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "allergies": {
+      "type": "array",
+      "description": "Drug or substance allergies and (if reported) the reaction. Empty if NKDA / none discussed.",
+      "items": {
+        "type": "object",
+        "required": ["substance"],
+        "additionalProperties": false,
+        "properties": {
+          "substance": { "type": "string" },
+          "reaction":  { "type": ["string", "null"] }
+        }
+      }
+    },
+    "social_history": {
+      "type": "object",
+      "description": "Brief social history. Each field optional; only what the patient disclosed.",
+      "additionalProperties": false,
+      "properties": {
+        "smoking_status":     { "type": ["string", "null"], "enum": ["never", "former", "current", "unknown", null] },
+        "alcohol_use":        { "type": ["string", "null"], "description": "e.g. 'none', 'social', '2 drinks/week'." },
+        "recreational_drugs": { "type": ["string", "null"], "description": "e.g. 'denies', 'occasional cannabis'." },
+        "occupation":         { "type": ["string", "null"] }
+      }
+    },
+    "clinician_notes": {
+      "type": ["object", "null"],
+      "description": "AI-generated post-hoc considerations. NOT a diagnosis. Hedged. Generated from the transcript at extraction time.",
+      "additionalProperties": false,
+      "properties": {
+        "differential_considerations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Up to 4 short, hedged differential considerations (e.g. 'consider acute appendicitis vs ovarian pathology'). Each line ≤ 140 chars. Empty if uncertain."
+        },
+        "suggested_followups": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Up to 2 follow-up questions the clinician might want to ask in person."
+        }
+      }
+    },
+    "icd10_candidates": {
+      "type": "array",
+      "description": "1-3 candidate ICD-10 codes for the chief complaint. AI-generated; clinician reviews before coding.",
+      "items": {
+        "type": "object",
+        "required": ["code", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "code":        { "type": "string", "description": "e.g. 'R10.31'" },
+          "description": { "type": "string", "description": "e.g. 'Right lower quadrant abdominal pain'" }
+        }
+      }
+    },
+    "completeness": {
+      "type": ["object", "null"],
+      "description": "Computed in code (not by the LLM) from the populated fields. Anything the LLM emits here is ignored.",
+      "additionalProperties": false,
+      "properties": {
+        "score":          { "type": "integer", "minimum": 0, "maximum": 100 },
+        "missing_fields": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "intake_notes": {
       "type": ["string", "null"],
       "description": "Free-text notes the agent captured at wrap-up — anything the patient wanted the doctor to know that didn't fit elsewhere."

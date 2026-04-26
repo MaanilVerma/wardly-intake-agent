@@ -102,6 +102,66 @@ class CallMetadata(BaseModel):
     duration_sec: Optional[int] = None
 
 
+# ---------- patient header band + history (extension fields) ----------
+
+class PatientIdentifiers(BaseModel):
+    """Captured in the Phase 0 verification step at the top of the call —
+    name, appointment time, visit type. The line a clinician scans first."""
+    name: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    preferred_pronouns: Optional[str] = None
+    appointment_time: Optional[str] = None
+    appointment_time_iso: Optional[datetime] = None  # resolved from verbatim using today's date
+    visit_type: Optional[Literal["new_patient", "follow_up", "urgent", "telehealth", "unknown"]] = None
+    reason_for_visit_today: Optional[str] = None
+
+
+class Medication(BaseModel):
+    name: str
+    dose: Optional[str] = None
+    frequency: Optional[str] = None
+
+
+class Allergy(BaseModel):
+    substance: str
+    reaction: Optional[str] = None
+
+
+class SocialHistory(BaseModel):
+    smoking_status: Optional[Literal["never", "former", "current", "unknown"]] = None
+    alcohol_use: Optional[str] = None
+    recreational_drugs: Optional[str] = None
+    occupation: Optional[str] = None
+
+    def is_empty(self) -> bool:
+        return all(v is None for v in (
+            self.smoking_status, self.alcohol_use, self.recreational_drugs, self.occupation,
+        ))
+
+
+class ClinicianNotes(BaseModel):
+    """AI-generated, hedged. NOT a diagnosis. Surfaced in a clearly-labeled
+    panel at the bottom of the brief."""
+    differential_considerations: list[str] = Field(default_factory=list)
+    suggested_followups: list[str] = Field(default_factory=list)
+
+    def is_empty(self) -> bool:
+        return not self.differential_considerations and not self.suggested_followups
+
+
+class ICD10Candidate(BaseModel):
+    code: str
+    description: str
+
+
+class Completeness(BaseModel):
+    """Computed in Python from the populated fields — never trusted from the LLM.
+    Surfaced as a chip in the brief footer to give the clinician a quick read on
+    how thorough the intake was."""
+    score: int = Field(ge=0, le=100)
+    missing_fields: list[str] = Field(default_factory=list)
+
+
 # ---------- top-level model ----------
 
 class ClinicalIntakeBrief(BaseModel):
@@ -110,6 +170,14 @@ class ClinicalIntakeBrief(BaseModel):
     ros: ROS
     red_flags: list[RedFlag] = Field(default_factory=list)
     patient_demographics: Optional[PatientDemographics] = None
+    patient_identifiers: Optional[PatientIdentifiers] = None
+    past_medical_history: list[str] = Field(default_factory=list)
+    current_medications: list[Medication] = Field(default_factory=list)
+    allergies: list[Allergy] = Field(default_factory=list)
+    social_history: Optional[SocialHistory] = None
+    clinician_notes: Optional[ClinicianNotes] = None
+    icd10_candidates: list[ICD10Candidate] = Field(default_factory=list)
+    completeness: Optional[Completeness] = None
     intake_notes: Optional[str] = None
     call_metadata: Optional[CallMetadata] = None
 
@@ -219,3 +287,82 @@ class ClinicalIntakeBrief(BaseModel):
             parts.append(self.intake_notes + "\n")
 
         return "\n".join(parts).rstrip() + "\n"
+
+
+# ---------- completeness ----------
+#
+# Computed in code from the populated fields, never trusted from the LLM.
+# We intentionally weight the *spine* of a clinical intake (CC verbatim, HPI
+# narrative, two HPI specifics, ROS coverage, red-flag awareness) higher than
+# nice-to-haves like medications. The score is a clinician-facing read on
+# how thorough the intake was — not a precision metric.
+
+# Each entry: (key shown in `missing_fields`, weight, callable that returns True
+# when the field is "captured"). Weights sum to 100 for a clean percentage.
+_COMPLETENESS_CHECKS: list[tuple[str, int, str]] = [
+    # CC & HPI core (40 pts)
+    ("chief_complaint.verbatim", 10, "cc_verbatim"),
+    ("chief_complaint.summary", 5, "cc_summary"),
+    ("hpi.narrative", 10, "hpi_narrative"),
+    ("hpi.onset", 4, "hpi_onset"),
+    ("hpi.character", 3, "hpi_character"),
+    ("hpi.severity", 4, "hpi_severity"),
+    ("hpi.timing", 4, "hpi_timing"),
+    # ROS (20 pts) — at least 2 systems with content, constitutional present
+    ("ros.constitutional", 6, "ros_constitutional"),
+    ("ros.coverage", 14, "ros_coverage"),
+    # Patient / visit context (15 pts)
+    ("patient_identifiers.name", 6, "name"),
+    ("patient_identifiers.appointment_time", 4, "appointment_time"),
+    ("patient_identifiers.visit_type", 5, "visit_type"),
+    # Quick history (15 pts)
+    ("past_medical_history", 5, "pmh"),
+    ("current_medications", 5, "meds"),
+    ("allergies", 5, "allergies"),
+    # AI-assisted niceties (10 pts)
+    ("clinician_notes", 5, "clinician_notes"),
+    ("icd10_candidates", 5, "icd10"),
+]
+
+
+def compute_completeness(brief: ClinicalIntakeBrief) -> Completeness:
+    """Score the brief 0-100 against the canonical intake spine.
+
+    The score is for the clinician's eye, not a precision metric. Anything the
+    LLM puts in `brief.completeness` is ignored — the caller is expected to
+    overwrite it with the result of this function.
+    """
+    cc = brief.chief_complaint
+    hpi = brief.hpi
+    ros = brief.ros
+    pid = brief.patient_identifiers
+
+    presence: dict[str, bool] = {
+        "cc_verbatim":       bool(cc.verbatim and cc.verbatim.strip()),
+        "cc_summary":        bool(cc.summary and cc.summary.strip()),
+        "hpi_narrative":     bool(hpi.narrative and len(hpi.narrative.strip()) >= 30),
+        "hpi_onset":         bool(hpi.onset),
+        "hpi_character":     bool(hpi.character),
+        "hpi_severity":      hpi.severity_now is not None or hpi.severity_worst is not None,
+        "hpi_timing":        bool(hpi.timing),
+        "ros_constitutional": ros.constitutional is not None and not ros.constitutional.is_empty(),
+        "ros_coverage":      len(ros.asked_systems()) >= 2,
+        "name":              bool(pid and pid.name),
+        "appointment_time":  bool(pid and pid.appointment_time),
+        "visit_type":        bool(pid and pid.visit_type and pid.visit_type != "unknown"),
+        "pmh":               bool(brief.past_medical_history),
+        "meds":              bool(brief.current_medications),
+        "allergies":         bool(brief.allergies),
+        "clinician_notes":   brief.clinician_notes is not None and not brief.clinician_notes.is_empty(),
+        "icd10":             bool(brief.icd10_candidates),
+    }
+
+    score = 0
+    missing: list[str] = []
+    for label, weight, key in _COMPLETENESS_CHECKS:
+        if presence.get(key):
+            score += weight
+        else:
+            missing.append(label)
+    score = max(0, min(100, score))
+    return Completeness(score=score, missing_fields=missing)
