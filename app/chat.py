@@ -29,11 +29,11 @@ logger = logging.getLogger(__name__)
 # The greeting matches Vapi's `firstMessage`. Hardcoding it (rather than
 # generating from the system prompt) saves an LLM round-trip on connect
 # and gives us identical patient-facing copy across both transports.
+# Deliberately short and action-first — no "I'd like to ask a few questions"
+# (forbidden phrase per the system prompt), no clipboard preamble.
 GREETING = (
-    "Hi, this is the intake assistant for the clinic. Before your "
-    "appointment I'd like to ask a few questions so the doctor knows "
-    "what's going on. This will take about five to seven minutes. Is now "
-    "a good time?"
+    "Hi, this is Maria from the clinic — quick check before your visit, "
+    "takes about five minutes. Is now okay?"
 )
 
 

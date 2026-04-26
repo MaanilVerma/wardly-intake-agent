@@ -3,7 +3,7 @@
 
   "name": "wardly-intake-agent",
 
-  "firstMessage": "Hi, this is the intake assistant for the clinic. Before your appointment I'd like to ask a few questions so the doctor knows what's going on. This will take about five to seven minutes. Is now a good time?",
+  "firstMessage": "Hi, this is Maria from the clinic — quick check before your visit, takes about five minutes. Is now okay?",
 
   "transcriber": {
     "provider": "deepgram",
