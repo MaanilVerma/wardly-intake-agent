@@ -17,10 +17,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.brief import extract_from_transcript
-from app.llm import ChatMessage, chat_turn
+from app.llm import ChatMessage, LLMQuotaExhausted, LLMUpstreamError, chat_turn
 from app.prompts import SYSTEM_PROMPT
 from app.storage import save_json, save_markdown, save_transcript
 
@@ -76,8 +76,6 @@ class _SessionStore:
 _store = _SessionStore()
 
 
-# --- request/response models ----------------------------------------------
-
 class StartResponse(BaseModel):
     session_id: str
     first_message: str
@@ -102,8 +100,6 @@ class FinalizeResponse(BaseModel):
     summary: str
 
 
-# --- helpers ---------------------------------------------------------------
-
 def _format_transcript(history: list[ChatMessage]) -> str:
     """Render the session as the same Agent:/Patient: format as our test fixtures.
     The extraction prompt and Pydantic schema are agnostic to phrasing, but a
@@ -114,8 +110,6 @@ def _format_transcript(history: list[ChatMessage]) -> str:
         lines.append(f"{prefix}: {m.content.strip()}")
     return "\n".join(lines)
 
-
-# --- routes ----------------------------------------------------------------
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -138,8 +132,18 @@ def message(req: MessageRequest) -> MessageResponse:
 
     try:
         reply = chat_turn(sess.history, system=SYSTEM_PROMPT)
+    except LLMQuotaExhausted as e:
+        sess.history.pop()
+        logger.warning("chat quota exhausted for session %s", sess.session_id)
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e))
+    except LLMUpstreamError as e:
+        sess.history.pop()
+        logger.exception("chat LLM upstream error for session %s", sess.session_id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
     except Exception:
-        # Roll back the failed user turn so a retry doesn't double-record it.
+        # Anything else: roll back so a retry doesn't double-record the turn,
+        # then let FastAPI's 500 path handle it (these are real bugs we want
+        # to see in logs, not swallow with a friendly message).
         sess.history.pop()
         raise
 
@@ -149,7 +153,11 @@ def message(req: MessageRequest) -> MessageResponse:
 
 @router.post("/finalize", response_model=FinalizeResponse)
 def finalize(req: FinalizeRequest) -> FinalizeResponse:
-    """End the intake: extract the brief, write artifacts to disk, drop the session."""
+    """End the intake: extract the brief, write artifacts to disk, drop the session.
+
+    Session is dropped only on success — a failed finalize leaves the session
+    intact so the patient can retry without losing their turns.
+    """
     sess = _store.get(req.session_id)
     if not any(m.role == "user" for m in sess.history):
         raise HTTPException(
@@ -160,16 +168,49 @@ def finalize(req: FinalizeRequest) -> FinalizeResponse:
     transcript = _format_transcript(sess.history)
     ended_at = datetime.now(timezone.utc)
 
-    brief = extract_from_transcript(
-        transcript,
-        call_id=sess.session_id,
-        started_at=sess.started_at,
-        ended_at=ended_at,
-    )
+    try:
+        brief = extract_from_transcript(
+            transcript,
+            call_id=sess.session_id,
+            started_at=sess.started_at,
+            ended_at=ended_at,
+        )
+    except LLMQuotaExhausted as e:
+        logger.warning("finalize quota exhausted for session %s", sess.session_id)
+        # Persist the transcript anyway — recovery CLI can re-run extraction
+        # later (`python -m app.brief briefs/<id>.transcript.txt`) once quota
+        # is back. Avoids losing the patient's intake to a transient 429.
+        try:
+            save_transcript(sess.session_id, transcript)
+        except OSError:
+            logger.exception("also failed to save transcript for %s", sess.session_id)
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(e))
+    except LLMUpstreamError as e:
+        logger.exception("finalize extraction failed for session %s", sess.session_id)
+        try:
+            save_transcript(sess.session_id, transcript)
+        except OSError:
+            logger.exception("also failed to save transcript for %s", sess.session_id)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
+    except ValidationError as e:
+        logger.exception("brief failed Pydantic validation for session %s", sess.session_id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="extracted brief failed schema validation",
+        ) from e
 
-    save_transcript(sess.session_id, transcript)
-    save_json(sess.session_id, brief.model_dump(mode="json"))
-    save_markdown(sess.session_id, brief.to_markdown())
+    # Persist all three artifacts together. If markdown write fails after
+    # JSON succeeded the JSON is still readable — view_brief renders from JSON.
+    try:
+        save_transcript(sess.session_id, transcript)
+        save_json(sess.session_id, brief.model_dump(mode="json"))
+        save_markdown(sess.session_id, brief.to_markdown())
+    except OSError as e:
+        logger.exception("disk write failed during finalize for %s", sess.session_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"failed to persist brief: {e}",
+        ) from e
 
     summary = brief.chief_complaint.summary
     _store.drop(sess.session_id)
