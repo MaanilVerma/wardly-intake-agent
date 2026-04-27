@@ -524,12 +524,34 @@
       appendMessage("agent", data.assistant_message);
       inferProgress("agent", data.assistant_message);
       speak(data.assistant_message);
+
+      // Server-side auto-finalize: when the agent fires a red-flag interrupt
+      // it strips the leaked tool-call syntax, records the flag, runs the
+      // brief extraction, and tells us to navigate. We let the patient
+      // hear/read the 911 advisory for ~3 seconds, then redirect to the
+      // brief. Even if the patient closes the tab the brief is already on
+      // disk by the time this response comes back.
+      if (data.ended) {
+        setPill("Emergency advised", "error");
+        setStatus("Auto-saving the brief — the doctor will see this immediately.", "thinking");
+        setComposerEnabled(false);
+        endBtn.disabled = true;
+        if (SUPPORTS_TTS) {
+          // Let the synth finish speaking the advisory before navigating —
+          // cutting it off mid-word would defeat the whole point.
+        }
+        if (data.brief_url) {
+          stopSessionTimer();
+          setTimeout(() => { window.location.href = data.brief_url; }, 3000);
+        }
+        return;
+      }
     } catch (e) {
       console.error(e);
       setPill("Error", "error");
       setStatus("Message failed. Check the server logs.", "error");
     } finally {
-      setBusy(false);
+      if (!isFinalizing) setBusy(false);
     }
   }
 
