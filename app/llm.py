@@ -31,20 +31,25 @@ logger = logging.getLogger(__name__)
 # key. The 3.x-preview models also have fresher capabilities (improved
 # instruction following, better JSON adherence).
 #
-# The fallback chain runs in priority order on quota exhaustion:
-#   1. gemini-3.1-flash-lite-preview  — 500 RPD, primary
-#   2. gemini-3-flash                 — 20 RPD, secondary preview
-#   3. gemini-2.5-flash-lite          — 20 RPD, stable
-#   4. gemini-2.5-flash               — 20 RPD, stronger but smaller quota
+# The fallback chain — stable models first, big-quota-but-unstable last.
+#   1. gemini-2.5-flash-lite          — 20 RPD, stable. Worked cleanly on
+#                                       every recovery run we tested. Default.
+#   2. gemini-2.5-flash               — 20 RPD, stable, stronger reasoning.
+#   3. gemini-3.1-flash-lite-preview  — 500 RPD but preview-marked and prone
+#                                       to 503 storms. Last resort: when both
+#                                       2.5 models hit 429 daily limit, this
+#                                       has fresh capacity.
 #
-# Models removed from the chain: gemini-2.0-flash and gemini-2.5-pro both
-# show 0/0 RPD on this account (not allocated) — keeping them in only
-# burned a network round-trip per fallback attempt.
-DEFAULT_MODEL = "gemini-3.1-flash-lite-preview"
+# Models removed from the chain (verified empirically on 2026-04-27):
+#   - gemini-3-flash: returns 404 NOT_FOUND on v1beta. The dashboard
+#     shows "Gemini 3 Flash" with quota allocated but the API rejects the
+#     string. Likely a different API name we don't know yet, or paid-tier
+#     only. Burning a network round-trip per fallback attempt.
+#   - gemini-2.0-flash, gemini-2.5-pro: 0/0 RPD on this account.
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
 FALLBACK_MODELS = (
-    "gemini-3-flash",
-    "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
+    "gemini-3.1-flash-lite-preview",
 )
 DEFAULT_TEMPERATURE = 0.4
 DEFAULT_MAX_OUTPUT_TOKENS = 600
@@ -139,13 +144,19 @@ def chat_turn(
             break
         except Exception as e:
             last_exc = e
-            if not _is_quota_error(e):
+            if not _is_recoverable_model_error(e):
                 raise
-            logger.warning("chat: model %s hit quota: %s — trying next fallback", candidate, str(e)[:120])
+            logger.warning(
+                "chat: model %s returned a recoverable error (%s) — trying next fallback",
+                candidate, str(e)[:140],
+            )
     if response is None:
         raise LLMQuotaExhausted(
-            f"All Gemini models hit quota (tried: {', '.join(candidates)}). "
-            "Wait a few minutes; per-minute limits clear quickly. Daily limits reset at Pacific midnight."
+            f"All Gemini models in the chain failed (tried: {', '.join(candidates)}). "
+            "Last error: " + (str(last_exc)[:200] if last_exc else "unknown") + ". "
+            "Causes can be quota (429), upstream overload (503), or model-not-found (404). "
+            "Per-minute quota limits clear quickly; daily limits reset at Pacific midnight; "
+            "503 storms are usually transient — retry in a minute."
         ) from last_exc
 
     text = (response.text or "").strip()
@@ -157,21 +168,43 @@ def chat_turn(
 def _is_recoverable_model_error(exc: Exception) -> bool:
     """True for errors where falling back to the next model is the right move.
 
-    Two cases:
-      1. Quota exhausted (429 / RESOURCE_EXHAUSTED) — daily or per-minute limit hit.
-      2. Model not found / not available (404 / NOT_FOUND / preview lapsed) —
-         we may have a stale name in FALLBACK_MODELS. Skip and try next.
+    Cases that justify a rotation:
+      1. **Quota exhausted** — 429 / RESOURCE_EXHAUSTED. Daily or per-minute
+         limit hit on this model; another model in the chain may have capacity.
+      2. **Model overloaded** — 503 UNAVAILABLE. The model is fine, just
+         drowning in demand. Another model in the chain is almost certainly
+         not having the same exact spike at the same exact moment.
+      3. **Other transient upstream** — 500 INTERNAL, 502 BAD_GATEWAY,
+         504 DEADLINE_EXCEEDED. Same logic: rotate, don't fail.
+      4. **Model not found** — 404 / NOT_FOUND / preview lapsed. We may
+         have a stale name in FALLBACK_MODELS. Skip and try next.
 
-    Any other error (auth failure, schema invalid, network) propagates so we
-    don't paper over real bugs.
+    Errors that should NOT be retried (and intentionally propagate):
+      - 400 INVALID_ARGUMENT — schema problem, prompt problem, real bug
+      - 401 / 403 — auth failure, won't fix on retry
+      - Network errors that aren't HTTP — handled at a layer above
     """
     msg = str(exc)
-    if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
+    msg_lower = msg.lower()
+
+    # String-shape detection (the SDK formats errors as "<code> <NAME>. {...}")
+    transient_tokens = (
+        "RESOURCE_EXHAUSTED",  # 429 — quota
+        "UNAVAILABLE",         # 503 — overloaded
+        "DEADLINE_EXCEEDED",   # 504 — timed out
+        "INTERNAL",            # 500 — generic Google-side fault
+        "BAD_GATEWAY",         # 502
+        "NOT_FOUND",           # 404 — bad/expired model name
+    )
+    for token in transient_tokens:
+        if token in msg:
+            return True
+    if "is not found" in msg_lower:
         return True
-    if "NOT_FOUND" in msg or "404" in msg or "is not found" in msg.lower():
-        return True
+
+    # Numeric-code detection (when the SDK exposes status_code / code on the exception)
     code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
-    return code in (404, 429)
+    return code in (404, 429, 500, 502, 503, 504)
 
 
 # Keep the old name as an alias so existing call sites stay working without
@@ -220,14 +253,18 @@ def generate_structured(
             break
         except Exception as e:
             last_exc = e
-            if not _is_quota_error(e):
+            if not _is_recoverable_model_error(e):
                 raise
-            logger.warning("model %s hit quota: %s — trying next fallback", candidate, str(e)[:120])
+            logger.warning(
+                "model %s returned a recoverable error (%s) — trying next fallback",
+                candidate, str(e)[:140],
+            )
     if response is None:
         raise LLMQuotaExhausted(
-            f"All Gemini models hit quota (tried: {', '.join(candidates)}). "
-            "Wait a few minutes for the per-minute limit to clear, or for the "
-            "daily limit to reset (Pacific midnight)."
+            f"All Gemini models in the chain failed (tried: {', '.join(candidates)}). "
+            "Last error: " + (str(last_exc)[:200] if last_exc else "unknown") + ". "
+            "Causes can be quota (429), upstream overload (503), or model-not-found (404). "
+            "Retry in a minute for transient storms; daily limits reset at Pacific midnight."
         ) from last_exc
 
     # Prefer parsed object if the SDK already validated it; otherwise parse text.
